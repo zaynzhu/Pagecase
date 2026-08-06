@@ -29,6 +29,9 @@ struct SearchResultsView: View {
               .padding(.vertical, 30)
           } else {
             ForEach(Array(visibleResults.enumerated()), id: \.element.id) { index, result in
+              let actionEnabled = model.isSearchActionAvailable(result)
+              let actionTitle = model.searchActionTitle(for: result)
+
               Button {
                 model.selectSearchResult(result)
                 model.activate(result)
@@ -61,9 +64,9 @@ struct SearchResultsView: View {
                     .foregroundStyle(Palette.muted(colorScheme))
                     .lineLimit(1)
 
-                  Text(result.kind == .live ? "定位" : "打开")
+                  Text(actionTitle)
                     .font(.system(size: 11, weight: .semibold))
-                    .frame(width: 34, alignment: .trailing)
+                    .frame(width: 74, alignment: .trailing)
                 }
                 .padding(.horizontal, 12)
                 .frame(minHeight: 55)
@@ -75,6 +78,9 @@ struct SearchResultsView: View {
                 )
               }
               .buttonStyle(.plain)
+              .disabled(!actionEnabled)
+              .opacity(actionEnabled ? 1 : 0.62)
+              .accessibilityLabel("\(result.title)，\(actionTitle)")
               .id(result.id)
 
               if index < visibleResults.count - 1 || hasMoreResults {

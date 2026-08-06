@@ -118,9 +118,7 @@ struct SettingsView: View {
           settingRow(
             symbol: "app.connected.to.app.below.fill",
             title: "Chrome 来源",
-            detail: model.liveStates.isEmpty
-              ? "尚未连接"
-              : "\(model.liveStates.count) 个来源，\(model.totalLiveTabs) 个网页"
+            detail: sourceSummary
           )
 
           Divider()
@@ -213,6 +211,16 @@ struct SettingsView: View {
     Label(title, systemImage: symbol)
       .font(.system(size: 12))
       .foregroundStyle(Palette.ink(colorScheme))
+  }
+
+  private var sourceSummary: String {
+    if model.isDemoMode {
+      return "\(model.liveStates.count) 个演示来源，\(model.totalLiveTabs) 个网页"
+    }
+    if model.liveStates.isEmpty {
+      return "尚未连接"
+    }
+    return "\(model.connectedSourceCount) 个已连接，\(model.staleSourceCount) 个过期，\(model.totalLiveTabs) 个网页"
   }
 
   private func connectionStep<Content: View>(

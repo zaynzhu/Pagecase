@@ -44,6 +44,12 @@ struct AppNotice: Identifiable, Equatable {
   let message: String
 }
 
+enum SourceAvailability: Equatable {
+  case connected
+  case stale
+  case missing
+}
+
 @MainActor
 final class AppModel: ObservableObject {
   static let applicationVersion = "0.1.0"
@@ -58,6 +64,7 @@ final class AppModel: ObservableObject {
   @Published var searchFocusRequest = 0
   @Published var extensionId = ""
   @Published var nativeHostStatus: NativeHostStatus
+  @Published private(set) var sourceAvailabilityById: [String: SourceAvailability] = [:]
   @Published var notice: AppNotice?
 
   let paths: AppPaths
@@ -214,7 +221,15 @@ final class AppModel: ObservableObject {
   }
 
   var hasConnectedSource: Bool {
-    liveStates.contains { isSourceConnected($0.source.id) }
+    sourceAvailabilityById.values.contains(.connected)
+  }
+
+  var connectedSourceCount: Int {
+    sourceAvailabilityById.values.filter { $0 == .connected }.count
+  }
+
+  var staleSourceCount: Int {
+    sourceAvailabilityById.values.filter { $0 == .stale }.count
   }
 
   var extensionPackageAvailable: Bool {
@@ -231,7 +246,36 @@ final class AppModel: ObservableObject {
     guard let state = liveStates.first(where: { $0.source.id == sourceId }) else {
       return false
     }
-    return now.timeIntervalSince(state.source.capturedAt) <= 30
+    return state.source.isFresh(at: now)
+  }
+
+  func sourceAvailability(for sourceId: String) -> SourceAvailability {
+    sourceAvailabilityById[sourceId] ?? .missing
+  }
+
+  func isSourceActionAvailable(_ sourceId: String) -> Bool {
+    isDemoMode || sourceAvailability(for: sourceId) == .connected
+  }
+
+  func liveActionTitle(for sourceId: String) -> String {
+    isSourceActionAvailable(sourceId) ? "定位" : "数据已过期"
+  }
+
+  func snapshotActionTitle(for sourceId: String) -> String {
+    isSourceActionAvailable(sourceId) ? "打开" : "Chrome 未连接"
+  }
+
+  func isSearchActionAvailable(_ result: SearchResult) -> Bool {
+    isSourceActionAvailable(result.sourceId)
+  }
+
+  func searchActionTitle(for result: SearchResult) -> String {
+    switch result.kind {
+    case .live:
+      return liveActionTitle(for: result.sourceId)
+    case .snapshot:
+      return snapshotActionTitle(for: result.sourceId)
+    }
   }
 
   func requestSearchFocus() {
@@ -250,6 +294,7 @@ final class AppModel: ObservableObject {
     do {
       let signature = try localContentSignature()
       if !force, signature == contentSignature {
+        refreshSourceAvailability()
         checkCommandResults()
         return
       }
@@ -257,6 +302,7 @@ final class AppModel: ObservableObject {
       liveStates = try snapshotRepository.loadLiveStates()
       snapshots = try snapshotRepository.loadSnapshots()
       contentSignature = signature
+      refreshSourceAvailability()
 
       if selectedSourceId == nil || !liveStates.contains(where: { $0.source.id == selectedSourceId }) {
         selectedSourceId = liveStates.first?.source.id
@@ -354,6 +400,15 @@ final class AppModel: ObservableObject {
 
   func activateSelectedSearchResult() {
     guard let result = selectedSearchResult else {
+      return
+    }
+    guard isSearchActionAvailable(result) else {
+      notice = AppNotice(
+        kind: .warning,
+        message: result.kind == .live
+          ? "实时数据已经过期，等待 Chrome 重新连接后才能定位"
+          : "Chrome 未连接，暂时无法打开这个快照网页"
+      )
       return
     }
     activate(result)
@@ -585,5 +640,19 @@ final class AppModel: ObservableObject {
       return
     }
     resetSearchSelection()
+  }
+
+  private func refreshSourceAvailability(now: Date = Date()) {
+    let updated = Dictionary(uniqueKeysWithValues: liveStates.map { state in
+      (
+        state.source.id,
+        state.source.isFresh(at: now)
+          ? SourceAvailability.connected
+          : SourceAvailability.stale
+      )
+    })
+    if updated != sourceAvailabilityById {
+      sourceAvailabilityById = updated
+    }
   }
 }

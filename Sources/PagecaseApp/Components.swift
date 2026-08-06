@@ -4,6 +4,7 @@ import SwiftUI
 struct PageItemRow: View {
   let page: PageItem
   let actionTitle: String
+  let actionEnabled: Bool
   let action: () -> Void
 
   @Environment(\.colorScheme) private var colorScheme
@@ -63,6 +64,8 @@ struct PageItemRow: View {
       .background(page.active ? Palette.selection(colorScheme) : .clear)
     }
     .buttonStyle(.plain)
+    .disabled(!actionEnabled)
+    .opacity(actionEnabled ? 1 : 0.62)
     .accessibilityLabel("\(page.displayTitle)，\(actionTitle)")
   }
 }
@@ -75,7 +78,7 @@ struct ConnectionBadge: View {
     guard let state else {
       return false
     }
-    return date.timeIntervalSince(state.source.capturedAt) <= 30
+    return state.source.isFresh(at: date)
   }
 
   var body: some View {

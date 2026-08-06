@@ -20,7 +20,8 @@ struct LiveStateView: View {
                 action: { page in
                   model.focus(page: page, sourceId: state.source.id)
                 },
-                actionTitle: "定位"
+                actionTitle: model.liveActionTitle(for: state.source.id),
+                actionEnabled: model.isSourceActionAvailable(state.source.id)
               )
             }
           }
@@ -55,7 +56,7 @@ struct LiveStateView: View {
         Text("现在")
           .font(.system(size: 30, weight: .semibold, design: .serif))
 
-        Text("\(state.source.label) · \(state.windows.count) 个窗口 · \(state.groupCount) 个标签组 · \(state.tabCount) 个网页")
+        Text("\(state.source.label) · \(state.windows.count) 个窗口 · \(state.groupCount) 个标签组 · \(state.tabCount) 个网页 · 最后更新 \(state.source.capturedAt.formatted(date: .abbreviated, time: .shortened))")
           .font(.system(size: 12, design: .monospaced))
           .foregroundStyle(Palette.muted(colorScheme))
       }
@@ -85,6 +86,7 @@ struct WindowSection: View {
   let sourceId: String
   let action: (PageItem) -> Void
   let actionTitle: String
+  let actionEnabled: Bool
 
   @Environment(\.colorScheme) private var colorScheme
 
@@ -120,6 +122,7 @@ struct WindowSection: View {
             pages: group.tabs,
             collapsed: group.collapsed,
             actionTitle: actionTitle,
+            actionEnabled: actionEnabled,
             action: action
           )
         }
@@ -131,6 +134,7 @@ struct WindowSection: View {
             pages: window.ungroupedTabs,
             collapsed: false,
             actionTitle: actionTitle,
+            actionEnabled: actionEnabled,
             action: action
           )
         }
@@ -147,6 +151,7 @@ struct PageGroupView: View {
   let pages: [PageItem]
   let collapsed: Bool
   let actionTitle: String
+  let actionEnabled: Bool
   let action: (PageItem) -> Void
 
   @Environment(\.colorScheme) private var colorScheme
@@ -184,7 +189,11 @@ struct PageGroupView: View {
         Divider()
 
         ForEach(visiblePages) { page in
-          PageItemRow(page: page, actionTitle: actionTitle) {
+          PageItemRow(
+            page: page,
+            actionTitle: actionTitle,
+            actionEnabled: actionEnabled
+          ) {
             action(page)
           }
 

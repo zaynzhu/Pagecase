@@ -145,9 +145,8 @@ struct SnapshotLibraryView: View {
               action: { page in
                 model.open(page: page, sourceId: snapshot.sourceId)
               },
-              actionTitle: model.isDemoMode || model.isSourceConnected(snapshot.sourceId)
-                ? "打开"
-                : "Chrome 未连接"
+              actionTitle: model.snapshotActionTitle(for: snapshot.sourceId),
+              actionEnabled: model.isSourceActionAvailable(snapshot.sourceId)
             )
           }
         }

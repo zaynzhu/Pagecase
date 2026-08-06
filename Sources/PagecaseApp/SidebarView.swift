@@ -52,6 +52,10 @@ struct SidebarView: View {
               .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(
+              "\(state.source.label)，\(sourceStatus(for: state))"
+            )
+            .accessibilityValue("\(state.tabCount) 个网页")
             .background(
               model.selectedSourceId == state.source.id && model.selection == .live
                 ? Palette.selection(colorScheme)
@@ -106,6 +110,19 @@ struct SidebarView: View {
     .clipShape(RoundedRectangle(cornerRadius: 6))
   }
 
+  private func sourceStatus(for state: LiveState) -> String {
+    if model.isDemoMode {
+      return "演示来源"
+    }
+    switch model.sourceAvailability(for: state.source.id) {
+    case .connected:
+      return "已连接"
+    case .stale:
+      return "数据过期"
+    case .missing:
+      return "等待 Chrome"
+    }
+  }
 }
 
 private struct SourceDot: View {
@@ -124,7 +141,7 @@ private struct SourceDot: View {
     if isDemoMode {
       return Color(red: 0.33, green: 0.56, blue: 0.72)
     }
-    return date.timeIntervalSince(state.source.capturedAt) <= 30
+    return state.source.isFresh(at: date)
       ? Color(red: 0.29, green: 0.61, blue: 0.39)
       : Color(red: 0.74, green: 0.58, blue: 0.23)
   }
