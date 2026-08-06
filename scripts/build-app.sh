@@ -7,6 +7,7 @@ APP_DIR="$PROJECT_DIR/dist/页匣.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+EXTENSION_DIR="$RESOURCES_DIR/ChromeExtension"
 ICON_TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/pagecase-icon.XXXXXX")
 
 cleanup() {
@@ -18,11 +19,16 @@ cd "$PROJECT_DIR"
 swift build -c release
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$EXTENSION_DIR"
 
 cp ".build/release/PagecaseApp" "$MACOS_DIR/PagecaseApp"
 cp ".build/release/PagecaseBridge" "$MACOS_DIR/PagecaseBridge"
 cp "Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
+cp "extension/manifest.json" "$EXTENSION_DIR/manifest.json"
+cp "extension/background.js" "$EXTENSION_DIR/background.js"
+cp "extension/commands.js" "$EXTENSION_DIR/commands.js"
+cp "extension/snapshot.js" "$EXTENSION_DIR/snapshot.js"
+cp "extension/README.txt" "$EXTENSION_DIR/README.txt"
 
 swift "Resources/generate-icon.swift" "$ICON_TEMP_DIR/master.png"
 ICONSET_DIR="$ICON_TEMP_DIR/AppIcon.iconset"

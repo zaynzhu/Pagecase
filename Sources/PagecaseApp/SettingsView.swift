@@ -1,8 +1,10 @@
+import PagecaseCore
 import SwiftUI
 
 struct SettingsView: View {
   @ObservedObject var model: AppModel
   @Environment(\.colorScheme) private var colorScheme
+  @State private var showingRemoveConnectionConfirmation = false
 
   var body: some View {
     ScrollView {
@@ -41,6 +43,77 @@ struct SettingsView: View {
             .foregroundStyle(Palette.muted(colorScheme))
         }
 
+        settingsSection("连接 Chrome") {
+          connectionStep(
+            number: "1",
+            title: "加载只读连接器",
+            detail: "准备并显示扩展文件夹。在 Chrome 地址栏打开 chrome://extensions，启用开发者模式，再选择“加载已解压的扩展程序”。"
+          ) {
+            Button("显示扩展文件") {
+              model.revealExtensionDirectory()
+            }
+            .disabled(!model.extensionPackageAvailable)
+          }
+
+          Divider()
+
+          connectionStep(
+            number: "2",
+            title: "粘贴扩展标识",
+            detail: "加载后，复制 Chrome 显示的 32 位扩展标识。页匣只允许这个扩展与本机 Bridge 通信。"
+          ) {
+            VStack(alignment: .leading, spacing: 7) {
+              TextField("32 位扩展标识", text: $model.extensionId)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11, design: .monospaced))
+                .padding(.horizontal, 9)
+                .frame(height: 30)
+                .background(Palette.canvas(colorScheme))
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .overlay {
+                  RoundedRectangle(cornerRadius: 5)
+                    .stroke(Palette.border(colorScheme), lineWidth: 1)
+                }
+
+              if !model.extensionId.isEmpty, !model.canConfigureNativeHost {
+                Text("扩展标识应为 32 位，只包含 a–p。")
+                  .font(.system(size: 10))
+                  .foregroundStyle(Color(red: 0.63, green: 0.43, blue: 0.08))
+              }
+            }
+          }
+
+          Divider()
+
+          connectionStep(
+            number: "3",
+            title: "配置本地连接",
+            detail: model.isDemoMode
+              ? "演示模式只写入隔离目录，不会注册到真实 Chrome。"
+              : "这一步只写入 Chrome 的 Native Messaging Host 清单，不会读取或改变任何标签。"
+          ) {
+            HStack(spacing: 10) {
+              Button("配置本地连接") {
+                model.configureNativeHost()
+              }
+              .buttonStyle(PrimaryButtonStyle())
+              .disabled(!model.canConfigureNativeHost)
+
+              if model.nativeHostStatus.state != .missing {
+                Button("移除连接") {
+                  showingRemoveConnectionConfirmation = true
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+              }
+            }
+          }
+
+          Divider()
+
+          nativeHostStatus
+        }
+
         settingsSection("连接状态") {
           settingRow(
             symbol: "app.connected.to.app.below.fill",
@@ -56,8 +129,8 @@ struct SettingsView: View {
             symbol: "point.3.connected.trianglepath.dotted",
             title: "Native Messaging Bridge",
             detail: model.isDemoMode
-              ? "演示模式未启用"
-              : (model.hasConnectedSource ? "已连接" : "等待扩展连接")
+              ? "演示数据，不连接 Chrome"
+              : (model.hasConnectedSource ? "已连接" : model.nativeHostStatus.detail)
           )
         }
 
@@ -80,6 +153,18 @@ struct SettingsView: View {
       .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     .background(Palette.canvas(colorScheme))
+    .confirmationDialog(
+      "移除本地连接配置？",
+      isPresented: $showingRemoveConnectionConfirmation,
+      titleVisibility: .visible
+    ) {
+      Button("移除连接", role: .destructive) {
+        model.removeNativeHost()
+      }
+      Button("取消", role: .cancel) {}
+    } message: {
+      Text("只删除页匣的 Host 清单，不删除扩展、快照或 Chrome 标签。")
+    }
   }
 
   private func settingsSection<Content: View>(
@@ -128,5 +213,80 @@ struct SettingsView: View {
     Label(title, systemImage: symbol)
       .font(.system(size: 12))
       .foregroundStyle(Palette.ink(colorScheme))
+  }
+
+  private func connectionStep<Content: View>(
+    number: String,
+    title: String,
+    detail: String,
+    @ViewBuilder content: () -> Content
+  ) -> some View {
+    HStack(alignment: .top, spacing: 12) {
+      Text(number)
+        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+        .frame(width: 24, height: 24)
+        .background(Palette.canvas(colorScheme))
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .overlay {
+          RoundedRectangle(cornerRadius: 5)
+            .stroke(Palette.border(colorScheme), lineWidth: 1)
+        }
+
+      VStack(alignment: .leading, spacing: 7) {
+        Text(title)
+          .font(.system(size: 12, weight: .semibold))
+
+        Text(detail)
+          .font(.system(size: 11))
+          .foregroundStyle(Palette.muted(colorScheme))
+          .lineSpacing(3)
+
+        content()
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
+  private var nativeHostStatus: some View {
+    HStack(alignment: .top, spacing: 10) {
+      Image(systemName: nativeHostStatusSymbol)
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(nativeHostStatusColor)
+        .frame(width: 18)
+
+      VStack(alignment: .leading, spacing: 3) {
+        Text(model.nativeHostStatus.detail)
+          .font(.system(size: 11, weight: .medium))
+
+        if let extensionId = model.nativeHostStatus.extensionId {
+          Text(extensionId)
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundStyle(Palette.muted(colorScheme))
+            .textSelection(.enabled)
+        }
+      }
+    }
+  }
+
+  private var nativeHostStatusSymbol: String {
+    switch model.nativeHostStatus.state {
+    case .missing:
+      return "circle.dashed"
+    case .ready:
+      return "checkmark.circle.fill"
+    case .invalid:
+      return "exclamationmark.triangle.fill"
+    }
+  }
+
+  private var nativeHostStatusColor: Color {
+    switch model.nativeHostStatus.state {
+    case .missing:
+      return Palette.muted(colorScheme)
+    case .ready:
+      return Color(red: 0.20, green: 0.49, blue: 0.25)
+    case .invalid:
+      return Color(red: 0.63, green: 0.43, blue: 0.08)
+    }
   }
 }

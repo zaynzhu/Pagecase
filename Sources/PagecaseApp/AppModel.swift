@@ -56,14 +56,20 @@ final class AppModel: ObservableObject {
   @Published var searchQuery = ""
   @Published var selectedSearchResultId: String?
   @Published var searchFocusRequest = 0
+  @Published var extensionId = ""
+  @Published var nativeHostStatus: NativeHostStatus
   @Published var notice: AppNotice?
 
   let paths: AppPaths
   let isDemoMode: Bool
   let isPerformanceMode: Bool
+  let bundledExtensionDirectory: URL
+  let preparedExtensionDirectory: URL
 
   private let snapshotRepository: SnapshotRepository?
   private let commandRepository: CommandRepository?
+  private let nativeHostManager: NativeHostManager
+  private let extensionPackageManager: ExtensionPackageManager
   private var pendingCommands: [String: Date] = [:]
   private var contentSignature: String?
 
@@ -76,19 +82,71 @@ final class AppModel: ObservableObject {
     let paths = (try? AppPaths.defaultPaths(environment: environment)) ?? fallback
     let isPerformanceMode = environment["PAGECASE_PERFORMANCE"] == "1"
       || ProcessInfo.processInfo.arguments.contains("--performance")
+    let isDemoMode = environment["PAGECASE_DEMO"] == "1"
+      || ProcessInfo.processInfo.arguments.contains("--demo")
+      || isPerformanceMode
+    let nativeHostDirectory: URL
+    if let override = environment["PAGECASE_NATIVE_HOST_ROOT"], !override.isEmpty {
+      nativeHostDirectory = URL(fileURLWithPath: override, isDirectory: true)
+    } else if isDemoMode {
+      nativeHostDirectory = paths.root.appendingPathComponent("DemoNativeMessagingHosts", isDirectory: true)
+    } else {
+      nativeHostDirectory = (try? NativeHostManager.defaultManifestDirectory(environment: environment))
+        ?? paths.root.appendingPathComponent("NativeMessagingHosts", isDirectory: true)
+    }
+    let bundleURL = Bundle.main.bundleURL
+    let bridgeURL = environment["PAGECASE_BRIDGE_PATH"].map {
+      URL(fileURLWithPath: $0)
+    } ?? bundleURL.appendingPathComponent("Contents/MacOS/PagecaseBridge")
+    let extensionDirectory = environment["PAGECASE_EXTENSION_ROOT"].map {
+      URL(fileURLWithPath: $0, isDirectory: true)
+    } ?? bundleURL.appendingPathComponent("Contents/Resources/ChromeExtension", isDirectory: true)
+
     return AppModel(
       paths: paths,
-      isDemoMode: environment["PAGECASE_DEMO"] == "1"
-        || ProcessInfo.processInfo.arguments.contains("--demo")
-        || isPerformanceMode,
-      isPerformanceMode: isPerformanceMode
+      isDemoMode: isDemoMode,
+      isPerformanceMode: isPerformanceMode,
+      nativeHostDirectory: nativeHostDirectory,
+      bridgeURL: bridgeURL,
+      extensionDirectory: extensionDirectory
     )
   }
 
-  init(paths: AppPaths, isDemoMode: Bool, isPerformanceMode: Bool = false) {
+  init(
+    paths: AppPaths,
+    isDemoMode: Bool,
+    isPerformanceMode: Bool = false,
+    nativeHostDirectory: URL? = nil,
+    bridgeURL: URL? = nil,
+    extensionDirectory: URL? = nil
+  ) {
     self.paths = paths
     self.isDemoMode = isDemoMode
     self.isPerformanceMode = isPerformanceMode
+    let resolvedBridgeURL = bridgeURL
+      ?? Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/PagecaseBridge")
+    let manager = NativeHostManager(
+      manifestDirectory: nativeHostDirectory
+        ?? paths.root.appendingPathComponent("NativeMessagingHosts", isDirectory: true),
+      bridgeURL: resolvedBridgeURL
+    )
+    nativeHostManager = manager
+    let initialNativeHostStatus = manager.inspect()
+    nativeHostStatus = initialNativeHostStatus
+    bundledExtensionDirectory = extensionDirectory
+      ?? Bundle.main.bundleURL.appendingPathComponent(
+        "Contents/Resources/ChromeExtension",
+        isDirectory: true
+      )
+    preparedExtensionDirectory = paths.root.appendingPathComponent(
+      "ChromeExtension",
+      isDirectory: true
+    )
+    extensionPackageManager = ExtensionPackageManager(
+      sourceDirectory: bundledExtensionDirectory,
+      destinationDirectory: preparedExtensionDirectory
+    )
+    self.extensionId = initialNativeHostStatus.extensionId ?? ""
 
     let repositories: (SnapshotRepository?, CommandRepository?, Error?)
     do {
@@ -159,6 +217,16 @@ final class AppModel: ObservableObject {
     liveStates.contains { isSourceConnected($0.source.id) }
   }
 
+  var extensionPackageAvailable: Bool {
+    extensionPackageManager.isSourceAvailable()
+  }
+
+  var canConfigureNativeHost: Bool {
+    NativeHostManager.isValidExtensionId(
+      extensionId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    )
+  }
+
   func isSourceConnected(_ sourceId: String, now: Date = Date()) -> Bool {
     guard let state = liveStates.first(where: { $0.source.id == sourceId }) else {
       return false
@@ -171,6 +239,10 @@ final class AppModel: ObservableObject {
   }
 
   func refresh(force: Bool = false) {
+    let currentNativeHostStatus = nativeHostManager.inspect()
+    if currentNativeHostStatus != nativeHostStatus {
+      nativeHostStatus = currentNativeHostStatus
+    }
     guard let snapshotRepository else {
       return
     }
@@ -392,6 +464,46 @@ final class AppModel: ObservableObject {
       notice = AppNotice(kind: .success, message: "已导入 \(imported.count) 个快照")
     } catch {
       notice = AppNotice(kind: .error, message: "导入失败：\(error.localizedDescription)")
+    }
+  }
+
+  func revealExtensionDirectory() {
+    do {
+      let directory = try extensionPackageManager.prepare()
+      NSWorkspace.shared.activateFileViewerSelecting([directory])
+      notice = AppNotice(kind: .success, message: "扩展文件已准备好，请在 Chrome 中选择这个文件夹")
+    } catch {
+      notice = AppNotice(kind: .error, message: "扩展文件准备失败：\(error.localizedDescription)")
+    }
+  }
+
+  func configureNativeHost() {
+    do {
+      let status = try nativeHostManager.install(extensionId: extensionId)
+      nativeHostStatus = status
+      extensionId = status.extensionId ?? extensionId
+      notice = AppNotice(
+        kind: .success,
+        message: isDemoMode
+          ? "已在隔离目录完成连接配置演示"
+          : "本地连接已配置，页匣连接器会自动重试"
+      )
+    } catch {
+      nativeHostStatus = nativeHostManager.inspect()
+      notice = AppNotice(kind: .error, message: "连接配置失败：\(error.localizedDescription)")
+    }
+  }
+
+  func removeNativeHost() {
+    do {
+      try nativeHostManager.uninstall()
+      nativeHostStatus = nativeHostManager.inspect()
+      notice = AppNotice(
+        kind: .success,
+        message: isDemoMode ? "已移除隔离连接配置" : "本地连接配置已移除"
+      )
+    } catch {
+      notice = AppNotice(kind: .error, message: "移除连接失败：\(error.localizedDescription)")
     }
   }
 

@@ -131,6 +131,7 @@ struct ConnectionBadge: View {
 
 struct PrimaryButtonStyle: ButtonStyle {
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.isEnabled) private var isEnabled
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
@@ -141,6 +142,7 @@ struct PrimaryButtonStyle: ButtonStyle {
       .background(buttonColor(configuration.isPressed))
       .clipShape(RoundedRectangle(cornerRadius: 6))
       .scaleEffect(configuration.isPressed ? 0.98 : 1)
+      .opacity(isEnabled ? 1 : 0.38)
   }
 
   private func buttonColor(_ isPressed: Bool) -> Color {
