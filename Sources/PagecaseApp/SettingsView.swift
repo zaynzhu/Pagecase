@@ -35,6 +35,10 @@ struct SettingsView: View {
           }
           .buttonStyle(.bordered)
           .controlSize(.small)
+
+          Text("导出文件包含网页完整网址和可能存在的查询参数。")
+            .font(.system(size: 10))
+            .foregroundStyle(Palette.muted(colorScheme))
         }
 
         settingsSection("连接状态") {

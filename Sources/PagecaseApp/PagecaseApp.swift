@@ -18,6 +18,26 @@ struct PagecaseApp: App {
           model.requestSearchFocus()
         }
         .keyboardShortcut("k", modifiers: .command)
+
+        Divider()
+
+        Button("上一个搜索结果") {
+          model.moveSearchSelection(by: -1)
+        }
+        .keyboardShortcut(.upArrow, modifiers: [])
+        .disabled(model.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+        Button("下一个搜索结果") {
+          model.moveSearchSelection(by: 1)
+        }
+        .keyboardShortcut(.downArrow, modifiers: [])
+        .disabled(model.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+        Button("清空搜索") {
+          model.clearSearch()
+        }
+        .keyboardShortcut(.cancelAction)
+        .disabled(model.searchQuery.isEmpty)
       }
     }
   }

@@ -54,6 +54,7 @@ final class AppModel: ObservableObject {
   @Published var selectedSourceId: String?
   @Published var selectedSnapshotId: String?
   @Published var searchQuery = ""
+  @Published var selectedSearchResultId: String?
   @Published var searchFocusRequest = 0
   @Published var notice: AppNotice?
 
@@ -141,6 +142,15 @@ final class AppModel: ObservableObject {
     )
   }
 
+  var selectedSearchResult: SearchResult? {
+    let results = searchResults
+    if let selectedSearchResultId,
+       let selected = results.first(where: { $0.id == selectedSearchResultId }) {
+      return selected
+    }
+    return results.first
+  }
+
   var totalLiveTabs: Int {
     liveStates.reduce(0) { $0 + $1.tabCount }
   }
@@ -182,6 +192,7 @@ final class AppModel: ObservableObject {
       if selectedSnapshotId == nil || !snapshots.contains(where: { $0.id == selectedSnapshotId }) {
         selectedSnapshotId = snapshots.first?.id
       }
+      reconcileSearchSelection()
 
       checkCommandResults()
     } catch {
@@ -201,7 +212,7 @@ final class AppModel: ObservableObject {
       refresh(force: true)
       notice = AppNotice(
         kind: .success,
-        message: "已保存 \(snapshot.tabCount) 个网页，Chrome 保持不变"
+        message: "已从磁盘核对保存 \(snapshot.tabCount) 个网页、\(snapshot.groupCount) 个标签组，Chrome 保持不变"
       )
       return true
     } catch {
@@ -269,6 +280,43 @@ final class AppModel: ObservableObject {
     }
   }
 
+  func activateSelectedSearchResult() {
+    guard let result = selectedSearchResult else {
+      return
+    }
+    activate(result)
+  }
+
+  func selectSearchResult(_ result: SearchResult) {
+    selectedSearchResultId = result.id
+  }
+
+  func resetSearchSelection() {
+    selectedSearchResultId = searchResults.first?.id
+  }
+
+  func moveSearchSelection(by offset: Int) {
+    let results = searchResults
+    guard !results.isEmpty else {
+      selectedSearchResultId = nil
+      return
+    }
+
+    guard let selectedSearchResultId,
+          let currentIndex = results.firstIndex(where: { $0.id == selectedSearchResultId }) else {
+      self.selectedSearchResultId = offset < 0 ? results.last?.id : results.first?.id
+      return
+    }
+
+    let destination = min(max(currentIndex + offset, 0), results.count - 1)
+    self.selectedSearchResultId = results[destination].id
+  }
+
+  func clearSearch() {
+    searchQuery = ""
+    selectedSearchResultId = nil
+  }
+
   func focus(page: PageItem, sourceId: String) {
     enqueue(
       BrowserCommand(
@@ -294,6 +342,16 @@ final class AppModel: ObservableObject {
 
   func exportLibrary() {
     guard let snapshotRepository else {
+      return
+    }
+
+    let warning = NSAlert()
+    warning.messageText = "导出完整资料库？"
+    warning.informativeText = "导出文件包含网页完整网址和可能存在的查询参数，请按浏览数据妥善保管。"
+    warning.alertStyle = .informational
+    warning.addButton(withTitle: "继续导出")
+    warning.addButton(withTitle: "取消")
+    guard warning.runModal() == .alertFirstButtonReturn else {
       return
     }
 
@@ -403,5 +461,17 @@ final class AppModel: ObservableObject {
         .count
       return "\(directory.lastPathComponent):\(date.timeIntervalSince1970):\(files)"
     }.joined(separator: "|")
+  }
+
+  private func reconcileSearchSelection() {
+    guard !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      selectedSearchResultId = nil
+      return
+    }
+    if let selectedSearchResultId,
+       searchResults.contains(where: { $0.id == selectedSearchResultId }) {
+      return
+    }
+    resetSearchSelection()
   }
 }

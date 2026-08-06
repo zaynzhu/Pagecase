@@ -50,6 +50,9 @@ struct RootView: View {
     .onChange(of: model.searchFocusRequest) { _, _ in
       searchFocused = true
     }
+    .onChange(of: model.searchQuery) { _, _ in
+      model.resetSearchSelection()
+    }
     .overlay(alignment: .topTrailing) {
       if let notice = model.notice {
         NoticeView(notice: notice) {
@@ -85,9 +88,7 @@ struct RootView: View {
           .font(.system(size: 13))
           .focused($searchFocused)
           .onSubmit {
-            if let result = model.searchResults.first {
-              model.activate(result)
-            }
+            model.activateSelectedSearchResult()
           }
 
         if model.searchQuery.isEmpty {
@@ -104,7 +105,7 @@ struct RootView: View {
             }
         } else {
           Button {
-            model.searchQuery = ""
+            model.clearSearch()
           } label: {
             Image(systemName: "xmark.circle.fill")
               .foregroundStyle(Palette.muted(colorScheme))
