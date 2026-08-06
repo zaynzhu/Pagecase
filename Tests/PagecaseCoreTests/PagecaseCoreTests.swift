@@ -5,6 +5,18 @@ import Testing
 private let referenceDate = Date(timeIntervalSince1970: 1_754_486_400)
 
 @Test
+func sourceFreshnessUsesSharedThirtySecondBoundary() {
+  let source = BrowserSource(
+    id: "freshness-source",
+    label: "Chrome",
+    capturedAt: referenceDate
+  )
+
+  #expect(source.isFresh(at: referenceDate.addingTimeInterval(30)))
+  #expect(!source.isFresh(at: referenceDate.addingTimeInterval(30.001)))
+}
+
+@Test
 func demoDataKeepsWindowsGroupsAndDuplicateURLs() throws {
   let states = DemoData.liveStates(referenceDate: referenceDate)
   let firstState = try #require(states.first)

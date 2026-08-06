@@ -39,6 +39,19 @@ func runChecks() throws -> Int {
   }
 
   var passed = 0
+  let freshnessSource = BrowserSource(
+    id: "freshness-source",
+    label: "Chrome",
+    capturedAt: referenceDate
+  )
+  passed += try check(
+    freshnessSource.isFresh(at: referenceDate.addingTimeInterval(30)),
+    "来源在 30 秒边界内被误判为过期"
+  )
+  passed += try check(
+    !freshnessSource.isFresh(at: referenceDate.addingTimeInterval(30.001)),
+    "过期来源仍被误判为已连接"
+  )
   passed += try check(states.count == 2, "浏览器来源数量不正确")
   passed += try check(firstState.windows.count == 2, "窗口数量不正确")
   passed += try check(firstState.groupCount == 6, "标签组数量不正确")

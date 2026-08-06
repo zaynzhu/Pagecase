@@ -24,6 +24,10 @@ public struct BrowserSource: Codable, Equatable, Sendable {
     self.label = label
     self.capturedAt = capturedAt
   }
+
+  public func isFresh(at date: Date = Date()) -> Bool {
+    date.timeIntervalSince(capturedAt) <= PagecaseSchema.sourceFreshnessInterval
+  }
 }
 
 public struct PageItem: Codable, Equatable, Identifiable, Sendable {
@@ -210,4 +214,5 @@ public struct LibraryExport: Codable, Equatable, Sendable {
 public enum PagecaseSchema {
   public static let currentVersion = 1
   public static let nativeMessageLimit = 4 * 1024 * 1024
+  public static let sourceFreshnessInterval: TimeInterval = 30
 }
