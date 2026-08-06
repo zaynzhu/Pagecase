@@ -1,0 +1,152 @@
+import Foundation
+
+public enum BrowserCommandAction: String, Codable, Sendable {
+  case focusTab
+  case openUrl
+}
+
+public struct BrowserCommand: Codable, Equatable, Identifiable, Sendable {
+  public let schemaVersion: Int
+  public let id: String
+  public let sourceId: String
+  public let action: BrowserCommandAction
+  public let createdAt: Date
+  public let tabId: Int?
+  public let windowId: Int?
+  public let url: String?
+
+  public init(
+    schemaVersion: Int = 1,
+    id: String = UUID().uuidString.lowercased(),
+    sourceId: String,
+    action: BrowserCommandAction,
+    createdAt: Date = Date(),
+    tabId: Int? = nil,
+    windowId: Int? = nil,
+    url: String? = nil
+  ) {
+    self.schemaVersion = schemaVersion
+    self.id = id
+    self.sourceId = sourceId
+    self.action = action
+    self.createdAt = createdAt
+    self.tabId = tabId
+    self.windowId = windowId
+    self.url = url
+  }
+
+  public func validate() throws {
+    guard schemaVersion == PagecaseSchema.currentVersion else {
+      throw StoreError.unsupportedSchema(schemaVersion)
+    }
+
+    switch action {
+    case .focusTab:
+      guard tabId != nil, windowId != nil, url == nil else {
+        throw StoreError.invalidFile("定位命令参数不完整")
+      }
+    case .openUrl:
+      guard tabId == nil, windowId == nil, let url, Self.isWebURL(url) else {
+        throw StoreError.invalidFile("打开命令必须包含有效的 http/https 网址")
+      }
+    }
+  }
+
+  private static func isWebURL(_ value: String) -> Bool {
+    guard let components = URLComponents(string: value),
+          let scheme = components.scheme?.lowercased() else {
+      return false
+    }
+    return scheme == "http" || scheme == "https"
+  }
+}
+
+public struct BrowserCommandResult: Codable, Equatable, Identifiable, Sendable {
+  public let schemaVersion: Int
+  public let id: String
+  public let sourceId: String
+  public let success: Bool
+  public let message: String
+  public let completedAt: Date
+
+  public init(
+    schemaVersion: Int = 1,
+    id: String,
+    sourceId: String,
+    success: Bool,
+    message: String,
+    completedAt: Date = Date()
+  ) {
+    self.schemaVersion = schemaVersion
+    self.id = id
+    self.sourceId = sourceId
+    self.success = success
+    self.message = message
+    self.completedAt = completedAt
+  }
+}
+
+public struct CommandRepository: Sendable {
+  public let paths: AppPaths
+  private let store: AtomicJSONStore
+
+  public init(paths: AppPaths, store: AtomicJSONStore = AtomicJSONStore()) throws {
+    self.paths = paths
+    self.store = store
+    try paths.createDirectories()
+  }
+
+  public func enqueue(_ command: BrowserCommand) throws {
+    try command.validate()
+    try store.write(command, to: paths.commandFile(commandId: command.id))
+  }
+
+  public func loadPendingCommands() throws -> [BrowserCommand] {
+    try loadCommands(in: paths.commands)
+  }
+
+  public func claim(_ command: BrowserCommand) throws {
+    let source = paths.commandFile(commandId: command.id)
+    let destination = paths.processingFile(commandId: command.id)
+    try FileManager.default.moveItem(at: source, to: destination)
+  }
+
+  public func loadProcessingCommands() throws -> [BrowserCommand] {
+    try loadCommands(in: paths.processing)
+  }
+
+  public func saveResult(_ result: BrowserCommandResult) throws {
+    try store.write(result, to: paths.resultFile(commandId: result.id))
+    let processing = paths.processingFile(commandId: result.id)
+    if FileManager.default.fileExists(atPath: processing.path) {
+      try FileManager.default.removeItem(at: processing)
+    }
+  }
+
+  public func loadResult(commandId: String) throws -> BrowserCommandResult? {
+    let file = paths.resultFile(commandId: commandId)
+    guard FileManager.default.fileExists(atPath: file.path) else {
+      return nil
+    }
+    return try store.read(BrowserCommandResult.self, from: file)
+  }
+
+  public func removeResult(commandId: String) throws {
+    let file = paths.resultFile(commandId: commandId)
+    if FileManager.default.fileExists(atPath: file.path) {
+      try FileManager.default.removeItem(at: file)
+    }
+  }
+
+  private func loadCommands(in directory: URL) throws -> [BrowserCommand] {
+    let urls = try FileManager.default.contentsOfDirectory(
+      at: directory,
+      includingPropertiesForKeys: nil,
+      options: [.skipsHiddenFiles]
+    )
+    return try urls
+      .filter { $0.pathExtension == "json" }
+      .map { try store.read(BrowserCommand.self, from: $0) }
+      .sorted { $0.createdAt < $1.createdAt }
+  }
+}

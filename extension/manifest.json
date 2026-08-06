@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "页匣连接器",
+  "version": "0.1.0",
+  "description": "将 Chrome 普通窗口与标签组只读同步到页匣。",
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "storage",
+    "nativeMessaging"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "页匣"
+  }
+}

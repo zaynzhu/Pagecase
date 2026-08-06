@@ -1,0 +1,11 @@
+{
+  "name": "pagecase",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:extension": "node --test extension/tests/*.test.js",
+    "test:bridge": "node scripts/check-bridge.mjs",
+    "check:extension": "node --check extension/background.js && node --check extension/commands.js && node --check extension/snapshot.js"
+  }
+}
