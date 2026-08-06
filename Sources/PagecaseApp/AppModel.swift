@@ -79,6 +79,7 @@ final class AppModel: ObservableObject {
   private let extensionPackageManager: ExtensionPackageManager
   private var pendingCommands: [String: Date] = [:]
   private var contentSignature: String?
+  private var handledSearchFocusRequest = 0
 
   static func make() -> AppModel {
     let environment = ProcessInfo.processInfo.environment
@@ -280,6 +281,14 @@ final class AppModel: ObservableObject {
 
   func requestSearchFocus() {
     searchFocusRequest += 1
+  }
+
+  func consumeSearchFocusRequest() -> Bool {
+    guard handledSearchFocusRequest != searchFocusRequest else {
+      return false
+    }
+    handledSearchFocusRequest = searchFocusRequest
+    return true
   }
 
   func refresh(force: Bool = false) {

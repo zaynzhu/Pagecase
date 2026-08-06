@@ -2,10 +2,12 @@ import SwiftUI
 
 @main
 struct PagecaseApp: App {
+  private static let mainWindowId = "main"
+
   @StateObject private var model = AppModel.make()
 
   var body: some Scene {
-    WindowGroup {
+    Window("页匣", id: Self.mainWindowId) {
       RootView(model: model)
         .frame(minWidth: 860, minHeight: 560)
         .preferredColorScheme(qaColorScheme)
@@ -40,6 +42,13 @@ struct PagecaseApp: App {
         .disabled(model.searchQuery.isEmpty)
       }
     }
+
+    MenuBarExtra {
+      MenuBarView(model: model, mainWindowId: Self.mainWindowId)
+    } label: {
+      Label("页匣", systemImage: "archivebox")
+    }
+    .menuBarExtraStyle(.menu)
   }
 
   private var qaColorScheme: ColorScheme? {

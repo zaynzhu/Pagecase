@@ -47,8 +47,11 @@ struct RootView: View {
         model.refresh()
       }
     }
+    .onAppear {
+      focusSearchIfRequested()
+    }
     .onChange(of: model.searchFocusRequest) { _, _ in
-      searchFocused = true
+      focusSearchIfRequested()
     }
     .onChange(of: model.searchQuery) { _, _ in
       model.resetSearchSelection()
@@ -64,6 +67,12 @@ struct RootView: View {
       }
     }
     .animation(.easeOut(duration: 0.18), value: model.notice)
+  }
+
+  private func focusSearchIfRequested() {
+    if model.consumeSearchFocusRequest() {
+      searchFocused = true
+    }
   }
 
   private var topBar: some View {
