@@ -1,4 +1,4 @@
-# Website Lists 第一版验证计划
+# 页匣 · Pagecase 第一版验证计划
 
 ## 1. 验证原则
 

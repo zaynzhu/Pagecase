@@ -1,4 +1,4 @@
-# Website Lists 开发规则
+# Pagecase 开发规则
 
 ## 产品边界
 

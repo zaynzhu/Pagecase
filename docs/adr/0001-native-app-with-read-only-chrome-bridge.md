@@ -1,6 +1,6 @@
 # 采用原生 macOS 应用与只读 Chrome 桥接扩展
 
-Website Lists 采用 SwiftUI/AppKit 原生应用、Native Messaging Host 和极简 Manifest V3 扩展，而不是纯扩展、AppleScript 应用或 Electron。Chrome 原生标签组只有扩展 API 能可靠读取，长期资料库与低内存界面更适合放在独立原生应用中；扩展只允许只读捕获，以及用户明确触发的“定位已有标签”和“新建一个标签”，代码中不实现关闭、移动、挂起或重组标签的能力。
+页匣采用 SwiftUI/AppKit 原生应用、Native Messaging Host 和极简 Manifest V3 扩展，而不是纯扩展、AppleScript 应用或 Electron。Chrome 原生标签组只有扩展 API 能可靠读取，长期资料库与低内存界面更适合放在独立原生应用中；扩展只允许只读捕获，以及用户明确触发的“定位已有标签”和“新建一个标签”，代码中不实现关闭、移动、挂起或重组标签的能力。
 
 ## Consequences
 

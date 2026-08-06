@@ -1,11 +1,11 @@
-# Website Lists 第一版技术设计
+# 页匣 · Pagecase 第一版技术设计
 
 ## 1. 架构结论
 
 第一版采用三个可独立测试的组件：
 
-1. `WebsiteListsApp`：SwiftUI/AppKit 原生 macOS 应用。
-2. `WebsiteListsBridge`：Swift 编写的 Chrome Native Messaging Host。
+1. `PagecaseApp`：SwiftUI/AppKit 原生 macOS 应用。
+2. `PagecaseBridge`：Swift 编写的 Chrome Native Messaging Host。
 3. `extension`：Manifest V3 Chrome 扩展。
 
 应用负责界面、搜索、快照和本地文件；扩展负责查询 Chrome 元数据和执行两种明确动作；Bridge 负责可靠地转发消息并原子落盘。
@@ -15,9 +15,9 @@
 ```mermaid
 flowchart LR
     C["Chrome 普通窗口"] -->|"只读元数据"| E["极简扩展"]
-    E -->|"Native Messaging"| B["WebsiteListsBridge"]
+    E -->|"Native Messaging"| B["PagecaseBridge"]
     B -->|"原子写入"| L["live/*.json"]
-    A["WebsiteListsApp"] -->|"读取"| L
+    A["PagecaseApp"] -->|"读取"| L
     A -->|"复制"| S["snapshots/*.json"]
     A -->|"写入单次命令"| Q["commands/*.json"]
     Q -->|"文件事件"| B
@@ -38,14 +38,14 @@ flowchart LR
 ## 3. 项目结构
 
 ```text
-Website-Lists/
+pagecase/
 ├── Package.swift
 ├── Sources/
-│   ├── WebsiteListsCore/
-│   ├── WebsiteListsApp/
-│   └── WebsiteListsBridge/
+│   ├── PagecaseCore/
+│   ├── PagecaseApp/
+│   └── PagecaseBridge/
 ├── Tests/
-│   └── WebsiteListsCoreTests/
+│   └── PagecaseCoreTests/
 ├── extension/
 │   ├── manifest.json
 │   ├── background.js
@@ -72,7 +72,7 @@ Website-Lists/
 `scripts/build-app.sh` 负责：
 
 1. 执行 Release Swift 构建。
-2. 创建 `dist/Website Lists.app` 标准目录。
+2. 创建 `dist/页匣.app` 标准目录。
 3. 放置应用主程序、Bridge、Info.plist 和图标。
 4. 使用本地 ad-hoc 签名生成可启动产物。
 
@@ -83,7 +83,7 @@ Website-Lists/
 默认目录：
 
 ```text
-~/Library/Application Support/Website Lists/
+~/Library/Application Support/Pagecase/
 ├── live/
 │   └── <sourceId>.json
 ├── snapshots/
@@ -94,7 +94,7 @@ Website-Lists/
 └── preferences.json
 ```
 
-测试通过 `WEBSITE_LISTS_DATA_ROOT` 指向临时目录，不接触真实用户数据。
+测试通过 `PAGECASE_DATA_ROOT` 指向临时目录，不接触真实用户数据。
 
 所有 JSON 写入遵循：
 
@@ -236,7 +236,7 @@ Bridge 连接后持续运行：
 
 ## 9. 应用状态管理
 
-`WebsiteListsCore` 提供：
+`PagecaseCore` 提供：
 
 - `Codable` 领域模型
 - 原子 JSON 存储
@@ -245,7 +245,7 @@ Bridge 连接后持续运行：
 - 搜索规范化与结果排序
 - 命令文件创建与结果读取
 
-`WebsiteListsApp` 使用 `@MainActor` 的单一 `AppModel`：
+`PagecaseApp` 使用 `@MainActor` 的单一 `AppModel`：
 
 - 每秒检查实时现场文件更新时间。
 - 资料库变更由应用自身立即刷新。
