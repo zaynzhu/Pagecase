@@ -69,6 +69,102 @@ func runChecks() throws -> Int {
   passed += try check(duplicateCount == 3, "重复网址被意外合并")
 
   let snapshots = DemoData.snapshots(referenceDate: referenceDate)
+  guard let exactSnapshot = snapshots.first(where: { $0.sourceId == firstState.source.id }),
+        let firstWindow = firstState.windows.first else {
+    throw CheckFailure.failed("演示数据缺少覆盖检查夹具")
+  }
+  let exactCoverage = SnapshotCoverageEvaluator.evaluate(
+    liveState: firstState,
+    snapshots: [exactSnapshot]
+  )
+  passed += try check(exactCoverage.isComplete, "完整快照未覆盖当前网页")
+
+  var reducedWindows = firstState.windows
+  reducedWindows[0] = BrowserWindow(
+    id: firstWindow.id,
+    order: firstWindow.order,
+    focused: firstWindow.focused,
+    groups: firstWindow.groups,
+    ungroupedTabs: Array(firstWindow.ungroupedTabs.dropLast())
+  )
+  let reducedState = LiveState(source: firstState.source, windows: reducedWindows)
+  passed += try check(
+    SnapshotCoverageEvaluator.evaluate(
+      liveState: reducedState,
+      snapshots: [exactSnapshot]
+    ).isComplete,
+    "关闭部分网页后原快照不再覆盖剩余网页"
+  )
+
+  let incompleteSnapshot = SavedSnapshot(
+    id: "incomplete-coverage",
+    name: "少一个重复网址",
+    createdAt: referenceDate,
+    sourceId: firstState.source.id,
+    windows: reducedWindows
+  )
+  let incompleteCoverage = SnapshotCoverageEvaluator.evaluate(
+    liveState: firstState,
+    snapshots: [incompleteSnapshot]
+  )
+  passed += try check(
+    incompleteCoverage.uncoveredPageCount == 1,
+    "重复网址的缺失数量判断错误"
+  )
+  var changedContextWindows = firstState.windows
+  var changedGroups = firstWindow.groups
+  guard let firstGroup = changedGroups.first else {
+    throw CheckFailure.failed("演示数据缺少标签组夹具")
+  }
+  changedGroups[0] = TabGroup(
+    id: firstGroup.id,
+    title: "其他语境",
+    color: firstGroup.color,
+    collapsed: firstGroup.collapsed,
+    order: firstGroup.order,
+    tabs: firstGroup.tabs
+  )
+  changedContextWindows[0] = BrowserWindow(
+    id: firstWindow.id,
+    order: firstWindow.order,
+    focused: firstWindow.focused,
+    groups: changedGroups,
+    ungroupedTabs: firstWindow.ungroupedTabs
+  )
+  let changedContextSnapshot = SavedSnapshot(
+    id: "changed-context-coverage",
+    name: "标签组不同",
+    sourceId: firstState.source.id,
+    windows: changedContextWindows
+  )
+  passed += try check(
+    SnapshotCoverageEvaluator.evaluate(
+      liveState: firstState,
+      snapshots: [changedContextSnapshot]
+    ).uncoveredPageCount == firstGroup.tabs.count,
+    "不同标签组语境被误认为已经覆盖"
+  )
+  passed += try check(
+    SnapshotCoverageEvaluator.evaluate(
+      liveState: firstState,
+      snapshots: [incompleteSnapshot, exactSnapshot]
+    ).snapshot?.id == exactSnapshot.id,
+    "未优先选择覆盖更完整的快照"
+  )
+  let wrongSourceSnapshot = SavedSnapshot(
+    id: "wrong-source-coverage",
+    name: "其他来源",
+    sourceId: "other-source",
+    windows: firstState.windows
+  )
+  passed += try check(
+    SnapshotCoverageEvaluator.evaluate(
+      liveState: firstState,
+      snapshots: [wrongSourceSnapshot]
+    ).uncoveredPageCount == firstState.tabCount,
+    "其他来源的快照被误认为可用覆盖"
+  )
+
   passed += try check(
     SearchEngine.search(query: "Prisma", liveStates: states, snapshots: []).first?.title
       == "Prisma ORM 文档",

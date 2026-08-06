@@ -36,6 +36,105 @@ func demoDataKeepsWindowsGroupsAndDuplicateURLs() throws {
 }
 
 @Test
+func snapshotCoveragePreservesContextDuplicatesAndClosedPages() throws {
+  let state = try #require(DemoData.liveStates(referenceDate: referenceDate).first)
+  let exactSnapshot = SavedSnapshot(
+    id: "exact",
+    name: "完整快照",
+    createdAt: referenceDate.addingTimeInterval(-60),
+    sourceId: state.source.id,
+    windows: state.windows
+  )
+
+  let exactCoverage = SnapshotCoverageEvaluator.evaluate(
+    liveState: state,
+    snapshots: [exactSnapshot]
+  )
+  #expect(exactCoverage.isComplete)
+  #expect(exactCoverage.coveredPageCount == state.tabCount)
+
+  var reducedWindows = state.windows
+  let firstWindow = try #require(reducedWindows.first)
+  reducedWindows[0] = BrowserWindow(
+    id: firstWindow.id,
+    order: firstWindow.order,
+    focused: firstWindow.focused,
+    groups: firstWindow.groups,
+    ungroupedTabs: Array(firstWindow.ungroupedTabs.dropLast())
+  )
+  let reducedState = LiveState(source: state.source, windows: reducedWindows)
+  #expect(
+    SnapshotCoverageEvaluator.evaluate(
+      liveState: reducedState,
+      snapshots: [exactSnapshot]
+    ).isComplete
+  )
+
+  let incompleteSnapshot = SavedSnapshot(
+    id: "incomplete",
+    name: "少一个重复网址",
+    createdAt: referenceDate,
+    sourceId: state.source.id,
+    windows: reducedWindows
+  )
+  let incompleteCoverage = SnapshotCoverageEvaluator.evaluate(
+    liveState: state,
+    snapshots: [incompleteSnapshot]
+  )
+  #expect(incompleteCoverage.uncoveredPageCount == 1)
+
+  var changedContextWindows = state.windows
+  var changedGroups = firstWindow.groups
+  let firstGroup = try #require(changedGroups.first)
+  changedGroups[0] = TabGroup(
+    id: firstGroup.id,
+    title: "其他语境",
+    color: firstGroup.color,
+    collapsed: firstGroup.collapsed,
+    order: firstGroup.order,
+    tabs: firstGroup.tabs
+  )
+  changedContextWindows[0] = BrowserWindow(
+    id: firstWindow.id,
+    order: firstWindow.order,
+    focused: firstWindow.focused,
+    groups: changedGroups,
+    ungroupedTabs: firstWindow.ungroupedTabs
+  )
+  let changedContextSnapshot = SavedSnapshot(
+    id: "changed-context",
+    name: "标签组不同",
+    sourceId: state.source.id,
+    windows: changedContextWindows
+  )
+  #expect(
+    SnapshotCoverageEvaluator.evaluate(
+      liveState: state,
+      snapshots: [changedContextSnapshot]
+    ).uncoveredPageCount == firstGroup.tabs.count
+  )
+
+  let bestCoverage = SnapshotCoverageEvaluator.evaluate(
+    liveState: state,
+    snapshots: [incompleteSnapshot, exactSnapshot]
+  )
+  #expect(bestCoverage.snapshot?.id == exactSnapshot.id)
+
+  let wrongSourceSnapshot = SavedSnapshot(
+    id: "wrong-source",
+    name: "其他来源",
+    sourceId: "other-source",
+    windows: state.windows
+  )
+  let missingCoverage = SnapshotCoverageEvaluator.evaluate(
+    liveState: state,
+    snapshots: [wrongSourceSnapshot]
+  )
+  #expect(missingCoverage.snapshot == nil)
+  #expect(missingCoverage.uncoveredPageCount == state.tabCount)
+}
+
+@Test
 func searchMatchesTitleGroupDomainURLAndSnapshotName() {
   let states = DemoData.liveStates(referenceDate: referenceDate)
   let snapshots = DemoData.snapshots(referenceDate: referenceDate)
