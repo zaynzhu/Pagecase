@@ -227,6 +227,99 @@ func runChecks() throws -> Int {
     passed += 1
   }
 
+  passed += try withTemporaryPaths { paths in
+    var localPassed = 0
+    try paths.createDirectories()
+    let bridgeURL = paths.root.appendingPathComponent("PagecaseBridge")
+    try Data("#!/bin/sh\n".utf8).write(to: bridgeURL)
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o755],
+      ofItemAtPath: bridgeURL.path
+    )
+    let manager = NativeHostManager(
+      manifestDirectory: paths.root.appendingPathComponent("NativeMessagingHosts"),
+      bridgeURL: bridgeURL
+    )
+    let extensionId = "abcdefghijklmnopabcdefghijklmnop"
+
+    localPassed += try check(manager.inspect().state == .missing, "Host 缺失状态判断错误")
+    let installed = try manager.install(extensionId: extensionId)
+    localPassed += try check(
+      installed.state == .ready && installed.extensionId == extensionId,
+      "Host 安装或核对失败"
+    )
+    let attributes = try FileManager.default.attributesOfItem(
+      atPath: manager.manifestURL.path
+    )
+    let permissions = (attributes[.posixPermissions] as? NSNumber)?.intValue ?? 0
+    localPassed += try check(
+      permissions & 0o777 == 0o644,
+      "Host 清单权限不正确"
+    )
+
+    let movedBridgeURL = paths.root.appendingPathComponent("MovedPagecaseBridge")
+    try Data("#!/bin/sh\n".utf8).write(to: movedBridgeURL)
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o755],
+      ofItemAtPath: movedBridgeURL.path
+    )
+    let movedManager = NativeHostManager(
+      manifestDirectory: manager.manifestDirectory,
+      bridgeURL: movedBridgeURL
+    )
+    localPassed += try check(
+      movedManager.inspect().state == .invalid,
+      "应用移动后的 Host 状态判断错误"
+    )
+
+    try manager.uninstall()
+    localPassed += try check(manager.inspect().state == .missing, "Host 精确卸载失败")
+
+    do {
+      try manager.install(extensionId: "invalid")
+      throw CheckFailure.failed("无效扩展标识未被拒绝")
+    } catch is StoreError {
+      localPassed += 1
+    }
+    return localPassed
+  }
+
+  passed += try withTemporaryPaths { paths in
+    var localPassed = 0
+    try paths.createDirectories()
+    let source = paths.root.appendingPathComponent("BundledExtension", isDirectory: true)
+    let destination = paths.root.appendingPathComponent("ChromeExtension", isDirectory: true)
+    try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+
+    for file in ExtensionPackageManager.requiredFiles {
+      try Data("content:\(file)".utf8).write(to: source.appendingPathComponent(file))
+    }
+
+    let manager = ExtensionPackageManager(
+      sourceDirectory: source,
+      destinationDirectory: destination
+    )
+    localPassed += try check(manager.isSourceAvailable(), "内置扩展完整性判断错误")
+    try manager.prepare()
+    localPassed += try check(
+      ExtensionPackageManager.requiredFiles.allSatisfy { file in
+        FileManager.default.fileExists(atPath: destination.appendingPathComponent(file).path)
+      },
+      "扩展文件准备不完整"
+    )
+
+    try FileManager.default.removeItem(
+      at: source.appendingPathComponent(ExtensionPackageManager.requiredFiles[0])
+    )
+    do {
+      try manager.prepare()
+      throw CheckFailure.failed("不完整扩展来源未被拒绝")
+    } catch is StoreError {
+      localPassed += 1
+    }
+    return localPassed
+  }
+
   return passed
 }
 

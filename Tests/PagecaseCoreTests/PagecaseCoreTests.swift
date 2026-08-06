@@ -204,6 +204,139 @@ func liveStateValidationRejectsInconsistentPageContext() throws {
 }
 
 @Test
+func nativeHostManagerInstallsInspectsAndRemovesExactManifest() throws {
+  try withTemporaryPaths { paths in
+    try paths.createDirectories()
+    let bridgeURL = paths.root.appendingPathComponent("PagecaseBridge")
+    try Data("#!/bin/sh\n".utf8).write(to: bridgeURL)
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o755],
+      ofItemAtPath: bridgeURL.path
+    )
+    let manager = NativeHostManager(
+      manifestDirectory: paths.root.appendingPathComponent("NativeMessagingHosts"),
+      bridgeURL: bridgeURL
+    )
+    let extensionId = "abcdefghijklmnopabcdefghijklmnop"
+
+    #expect(manager.inspect().state == .missing)
+    let installed = try manager.install(extensionId: extensionId)
+    #expect(installed.state == .ready)
+    #expect(installed.extensionId == extensionId)
+
+    let attributes = try FileManager.default.attributesOfItem(
+      atPath: manager.manifestURL.path
+    )
+    let permissions = try #require(attributes[.posixPermissions] as? NSNumber)
+    #expect(permissions.intValue & 0o777 == 0o644)
+
+    let movedBridgeURL = paths.root.appendingPathComponent("MovedPagecaseBridge")
+    try Data("#!/bin/sh\n".utf8).write(to: movedBridgeURL)
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o755],
+      ofItemAtPath: movedBridgeURL.path
+    )
+    let movedManager = NativeHostManager(
+      manifestDirectory: manager.manifestDirectory,
+      bridgeURL: movedBridgeURL
+    )
+    #expect(movedManager.inspect().state == .invalid)
+
+    try manager.uninstall()
+    #expect(manager.inspect().state == .missing)
+    #expect(!FileManager.default.fileExists(atPath: manager.manifestURL.path))
+  }
+}
+
+@Test
+func nativeHostManagerRejectsInvalidExtensionIdAndManifest() throws {
+  try withTemporaryPaths { paths in
+    try paths.createDirectories()
+    let bridgeURL = paths.root.appendingPathComponent("PagecaseBridge")
+    try Data("#!/bin/sh\n".utf8).write(to: bridgeURL)
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o755],
+      ofItemAtPath: bridgeURL.path
+    )
+    let manager = NativeHostManager(
+      manifestDirectory: paths.root.appendingPathComponent("NativeMessagingHosts"),
+      bridgeURL: bridgeURL
+    )
+
+    do {
+      try manager.install(extensionId: "not-a-chrome-extension-id")
+      Issue.record("无效扩展标识应被拒绝")
+    } catch {
+      #expect(error is StoreError)
+    }
+    #expect(manager.inspect().state == .missing)
+
+    try FileManager.default.createDirectory(
+      at: manager.manifestDirectory,
+      withIntermediateDirectories: true
+    )
+    try Data("{}".utf8).write(to: manager.manifestURL)
+    #expect(manager.inspect().state == .invalid)
+  }
+}
+
+@Test
+func extensionPackageManagerPreparesCompleteVerifiedDirectory() throws {
+  try withTemporaryPaths { paths in
+    try paths.createDirectories()
+    let source = paths.root.appendingPathComponent("BundledExtension", isDirectory: true)
+    let destination = paths.root.appendingPathComponent("ChromeExtension", isDirectory: true)
+    try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    try Data("stale".utf8).write(to: destination.appendingPathComponent("stale.txt"))
+
+    for file in ExtensionPackageManager.requiredFiles {
+      try Data("content:\(file)".utf8).write(to: source.appendingPathComponent(file))
+    }
+
+    let manager = ExtensionPackageManager(
+      sourceDirectory: source,
+      destinationDirectory: destination
+    )
+    #expect(manager.isSourceAvailable())
+    #expect(try manager.prepare() == destination)
+    #expect(!FileManager.default.fileExists(atPath: destination.appendingPathComponent("stale.txt").path))
+
+    for file in ExtensionPackageManager.requiredFiles {
+      #expect(
+        try Data(contentsOf: source.appendingPathComponent(file))
+          == Data(contentsOf: destination.appendingPathComponent(file))
+      )
+    }
+  }
+}
+
+@Test
+func extensionPackageManagerRejectsIncompleteSourceWithoutChangingDestination() throws {
+  try withTemporaryPaths { paths in
+    try paths.createDirectories()
+    let source = paths.root.appendingPathComponent("IncompleteExtension", isDirectory: true)
+    let destination = paths.root.appendingPathComponent("ChromeExtension", isDirectory: true)
+    try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    let existing = destination.appendingPathComponent("existing.txt")
+    try Data("keep".utf8).write(to: existing)
+
+    let manager = ExtensionPackageManager(
+      sourceDirectory: source,
+      destinationDirectory: destination
+    )
+    do {
+      try manager.prepare()
+      Issue.record("不完整的扩展来源应被拒绝")
+    } catch {
+      #expect(error is StoreError)
+    }
+    #expect(try Data(contentsOf: existing) == Data("keep".utf8))
+  }
+}
+
+@Test
 func invalidSchemaIsRejected() throws {
   try withTemporaryPaths { paths in
     let repository = try SnapshotRepository(paths: paths)
