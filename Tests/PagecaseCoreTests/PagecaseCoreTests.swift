@@ -115,6 +115,95 @@ func exportImportRoundTripAndIdConflict() throws {
 }
 
 @Test
+func invalidImportDoesNotPartiallyChangeLibrary() throws {
+  try withTemporaryPaths { paths in
+    let repository = try SnapshotRepository(paths: paths)
+    let state = try #require(DemoData.liveStates().first)
+    let existing = try repository.createSnapshot(from: state, name: "原有快照")
+
+    let valid = SavedSnapshot(
+      id: "valid-import",
+      name: "有效快照",
+      sourceId: state.source.id,
+      windows: state.windows
+    )
+    let invalidPage = PageItem(
+      id: 99_001,
+      windowId: 99_000,
+      groupId: nil,
+      index: 0,
+      title: "不应导入",
+      url: "file:///tmp/private"
+    )
+    let invalid = SavedSnapshot(
+      id: "invalid-import",
+      name: "损坏快照",
+      sourceId: state.source.id,
+      windows: [
+        BrowserWindow(
+          id: 99_000,
+          order: 0,
+          focused: false,
+          groups: [],
+          ungroupedTabs: [invalidPage]
+        )
+      ]
+    )
+    let importURL = paths.root.appendingPathComponent("invalid-library.json")
+    try AtomicJSONStore().write(
+      LibraryExport(applicationVersion: "test", snapshots: [valid, invalid]),
+      to: importURL
+    )
+
+    do {
+      try repository.importLibrary(from: importURL)
+      Issue.record("包含损坏快照的资料库应整体拒绝")
+    } catch {
+      #expect(error is StoreError)
+    }
+
+    let remaining = try repository.loadSnapshots()
+    #expect(remaining.count == 1)
+    #expect(remaining.first?.id == existing.id)
+  }
+}
+
+@Test
+func liveStateValidationRejectsInconsistentPageContext() throws {
+  try withTemporaryPaths { paths in
+    let repository = try SnapshotRepository(paths: paths)
+    let page = PageItem(
+      id: 2,
+      windowId: 99,
+      groupId: nil,
+      index: 0,
+      title: "窗口不一致",
+      url: "https://example.com"
+    )
+    let state = LiveState(
+      source: BrowserSource(id: "source", label: "Chrome", capturedAt: referenceDate),
+      windows: [
+        BrowserWindow(
+          id: 1,
+          order: 0,
+          focused: true,
+          groups: [],
+          ungroupedTabs: [page]
+        )
+      ]
+    )
+
+    do {
+      try repository.saveLiveState(state)
+      Issue.record("窗口标识不一致的网页应被拒绝")
+    } catch {
+      #expect(error is StoreError)
+    }
+    #expect(try repository.loadLiveStates().isEmpty)
+  }
+}
+
+@Test
 func invalidSchemaIsRejected() throws {
   try withTemporaryPaths { paths in
     let repository = try SnapshotRepository(paths: paths)

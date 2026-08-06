@@ -130,6 +130,54 @@ func runChecks() throws -> Int {
       "命令结果保存失败"
     )
 
+    let exportURL = paths.root.appendingPathComponent("library.json")
+    try snapshotsRepository.exportLibrary(to: exportURL, applicationVersion: "check")
+    let imported = try snapshotsRepository.importLibrary(from: exportURL)
+    let afterImport = try snapshotsRepository.loadSnapshots()
+    localPassed += try check(imported.count == 1, "资料库导入数量不正确")
+    localPassed += try check(
+      afterImport.count == 2 && Set(afterImport.map(\.id)).count == 2,
+      "导入标识冲突未保留两份快照"
+    )
+
+    let invalidPage = PageItem(
+      id: 90_001,
+      windowId: 90_000,
+      groupId: nil,
+      index: 0,
+      title: "无效页面",
+      url: "file:///tmp/private"
+    )
+    let invalidSnapshot = SavedSnapshot(
+      id: "invalid-import",
+      name: "无效快照",
+      sourceId: firstState.source.id,
+      windows: [
+        BrowserWindow(
+          id: 90_000,
+          order: 0,
+          focused: false,
+          groups: [],
+          ungroupedTabs: [invalidPage]
+        )
+      ]
+    )
+    let invalidImportURL = paths.root.appendingPathComponent("invalid-library.json")
+    try AtomicJSONStore().write(
+      LibraryExport(applicationVersion: "check", snapshots: [invalidSnapshot]),
+      to: invalidImportURL
+    )
+    do {
+      try snapshotsRepository.importLibrary(from: invalidImportURL)
+      throw CheckFailure.failed("损坏资料库未被拒绝")
+    } catch is StoreError {
+      localPassed += 1
+    }
+    localPassed += try check(
+      try snapshotsRepository.loadSnapshots().count == afterImport.count,
+      "损坏资料库造成了部分写入"
+    )
+
     return localPassed
   }
 
@@ -144,6 +192,37 @@ func runChecks() throws -> Int {
       url: "file:///tmp/private"
     ).validate()
     throw CheckFailure.failed("非 Web 协议未被拒绝")
+  } catch is StoreError {
+    passed += 1
+  }
+
+  let inconsistentPage = PageItem(
+    id: 90_100,
+    windowId: 2,
+    groupId: nil,
+    index: 0,
+    title: "窗口不一致",
+    url: "https://example.com"
+  )
+  let inconsistentState = LiveState(
+    source: BrowserSource(
+      id: "validation-source",
+      label: "Chrome",
+      capturedAt: referenceDate
+    ),
+    windows: [
+      BrowserWindow(
+        id: 1,
+        order: 0,
+        focused: true,
+        groups: [],
+        ungroupedTabs: [inconsistentPage]
+      )
+    ]
+  )
+  do {
+    try PagecaseValidator.validate(inconsistentState)
+    throw CheckFailure.failed("不一致的网页上下文未被拒绝")
   } catch is StoreError {
     passed += 1
   }
