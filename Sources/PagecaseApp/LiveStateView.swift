@@ -208,6 +208,7 @@ struct PageGroupView: View {
   let action: (PageItem) -> Void
 
   @Environment(\.colorScheme) private var colorScheme
+  @State private var isExpanded = true
   @State private var visiblePageCount = pageBatchSize
 
   var body: some View {
@@ -216,67 +217,82 @@ struct PageGroupView: View {
         .frame(width: 4)
 
       VStack(spacing: 0) {
-        HStack(spacing: 9) {
-          Circle()
-            .fill(color)
-            .frame(width: 7, height: 7)
+        Button {
+          isExpanded.toggle()
+        } label: {
+          HStack(spacing: 9) {
+            Circle()
+              .fill(color)
+              .frame(width: 7, height: 7)
 
-          Text(title)
-            .font(.system(size: 13, weight: .semibold))
+            Text(title)
+              .font(.system(size: 13, weight: .semibold))
 
-          Text("\(pages.count)")
-            .font(.system(size: 10, design: .monospaced))
-            .foregroundStyle(Palette.muted(colorScheme))
-
-          if collapsed {
-            Text("Chrome 中已折叠")
-              .font(.system(size: 10))
+            Text("\(pages.count)")
+              .font(.system(size: 10, design: .monospaced))
               .foregroundStyle(Palette.muted(colorScheme))
-          }
 
-          Spacer()
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 39)
-
-        Divider()
-
-        ForEach(visiblePages) { page in
-          PageItemRow(
-            page: page,
-            actionTitle: actionTitle,
-            actionEnabled: actionEnabled
-          ) {
-            action(page)
-          }
-
-          if page.id != visiblePages.last?.id || hasMorePages {
-            Divider()
-              .padding(.leading, 48)
-          }
-        }
-
-        if hasMorePages {
-          Button {
-            visiblePageCount = min(
-              visiblePageCount + Self.pageBatchSize,
-              pages.count
-            )
-          } label: {
-            HStack {
-              Image(systemName: "chevron.down")
-              Text("再显示 \(min(Self.pageBatchSize, pages.count - visiblePageCount)) 个网页")
-              Spacer()
-              Text("剩余 \(pages.count - visiblePageCount)")
-                .font(.system(size: 10, design: .monospaced))
+            if collapsed {
+              Text("Chrome 中已折叠")
+                .font(.system(size: 10))
                 .foregroundStyle(Palette.muted(colorScheme))
             }
-            .font(.system(size: 11, weight: .medium))
-            .padding(.horizontal, 15)
-            .frame(height: 40)
-            .contentShape(Rectangle())
+
+            Spacer()
+
+            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+              .font(.system(size: 9, weight: .semibold))
+              .foregroundStyle(Palette.muted(colorScheme))
           }
-          .buttonStyle(.plain)
+          .padding(.horizontal, 14)
+          .frame(height: 39)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title)，\(pages.count) 个网页")
+        .accessibilityValue(isExpanded ? "已展开" : "已折叠")
+        .accessibilityHint(isExpanded ? "折叠标签组" : "展开标签组")
+
+        if isExpanded {
+          Divider()
+
+          ForEach(visiblePages) { page in
+            PageItemRow(
+              page: page,
+              actionTitle: actionTitle,
+              actionEnabled: actionEnabled
+            ) {
+              action(page)
+            }
+
+            if page.id != visiblePages.last?.id || hasMorePages {
+              Divider()
+                .padding(.leading, 48)
+            }
+          }
+
+          if hasMorePages {
+            Button {
+              visiblePageCount = min(
+                visiblePageCount + Self.pageBatchSize,
+                pages.count
+              )
+            } label: {
+              HStack {
+                Image(systemName: "chevron.down")
+                Text("再显示 \(min(Self.pageBatchSize, pages.count - visiblePageCount)) 个网页")
+                Spacer()
+                Text("剩余 \(pages.count - visiblePageCount)")
+                  .font(.system(size: 10, design: .monospaced))
+                  .foregroundStyle(Palette.muted(colorScheme))
+              }
+              .font(.system(size: 11, weight: .medium))
+              .padding(.horizontal, 15)
+              .frame(height: 40)
+              .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+          }
         }
       }
     }
