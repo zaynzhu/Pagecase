@@ -18,7 +18,7 @@
 |---|---|
 | `swift build` | 通过 |
 | `swift test --enable-swift-testing --disable-xctest` | 测试包构建通过 |
-| `swift run PagecaseCoreChecks` | 23 项通过 |
+| `swift run PagecaseCoreChecks` | 32 项通过 |
 | 扩展语法检查 | 通过 |
 | 扩展 Node 测试 | 8 项通过 |
 | 扩展禁止 API 扫描 | 零命中 |
@@ -27,6 +27,8 @@
 | Release `.app` 构建 | 通过 |
 | ad-hoc 签名严格验证 | 通过 |
 | Native Host 清单隔离安装与卸载 | 通过 |
+| 应用内扩展准备与 Host 配置 | 隔离目录往返通过 |
+| `.app` 内置扩展文件 | 5 项齐全并签名通过 |
 
 当前机器没有完整 Xcode，Command Line Tools 的 Swift Testing 运行器不能正常枚举测试。项目因此同时保留标准 `Tests/PagecaseCoreTests`，并用可执行的 `PagecaseCoreChecks` 在本机实际运行同一组关键行为检查，避免把“测试包编译成功”误报为“测试已执行”。
 
@@ -65,6 +67,7 @@ nativeMessaging
 - 上下键选择、Return 执行选中项和 Escape 清空
 - 500 项搜索结果跨批次选择与自动滚动
 - 导出完整网址隐私提醒
+- 三步连接准备、扩展标识校验和 Host 状态
 - 未命名标签组、折叠状态和重复网址
 - 500 页性能夹具
 - 键盘与 VoiceOver 可访问名称
@@ -74,6 +77,7 @@ nativeMessaging
 - [浅色模式](../artifacts/qa-light.png)
 - [深色模式](../artifacts/qa-dark.png)
 - [键盘搜索选中态](../artifacts/qa-search-keyboard.png)
+- [连接准备设置页](../artifacts/qa-connection-setup.png)
 
 界面遵循 `minimalist-ui` 转译后的原生规则：温暖单色、系统字体、1px 分隔、低饱和分组脊线、克制圆角，无渐变、重阴影、玻璃拟态或卡片墙。
 
@@ -83,15 +87,17 @@ Release 应用载入 500 个网页项后空闲 60 秒：
 
 | 指标 | 实测 | 门槛 |
 |---|---:|---:|
-| 应用常驻内存 | 37–45MB | 目标 ≤80MB，上限 ≤100MB |
-| 应用物理内存足迹（60 秒） | 54MB | ≤100MB |
-| 应用空闲 CPU | 三次采样均为 0.0% | ≤1% |
+| 应用常驻内存（60 秒） | 71MB | 目标 ≤80MB，上限 ≤100MB |
+| 应用物理内存足迹（60 秒） | 40MB | ≤100MB |
+| 应用空闲 CPU（60 秒） | 0.3% | ≤1% |
 | Bridge 常驻内存 | 约 1.7MB | ≤25MB |
 | Bridge 空闲 CPU | 0.0% | ≤1% |
 
 长分组首次只建立 40 行视图，长搜索首次建立 50 行视图；全部网页仍可搜索，其余内容按需分批展示。这个调整将 500 页首次实现中的约 150MB 内存和约 20% 轮询 CPU 降至最终结果。
 
 本轮还在 500 项搜索结果中连续向下移动 55 次，确认选中项可以越过首批 50 项、加载下一批并自动滚动到第 56 项。
+
+连接诊断每 2 秒检查一次 Host 清单，但只有状态实际变化时才发布界面更新。验收中曾发现重复发布会让 500 页界面反复重建；修正后重新空闲 60 秒，最终结果保持在目标内。
 
 ## 未验证项
 

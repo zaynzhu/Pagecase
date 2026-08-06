@@ -49,7 +49,9 @@ pagecase/
 ├── extension/
 │   ├── manifest.json
 │   ├── background.js
+│   ├── commands.js
 │   ├── snapshot.js
+│   ├── README.txt
 │   └── tests/
 ├── Fixtures/
 ├── Resources/
@@ -74,7 +76,8 @@ pagecase/
 1. 执行 Release Swift 构建。
 2. 创建 `dist/页匣.app` 标准目录。
 3. 放置应用主程序、Bridge、Info.plist 和图标。
-4. 使用本地 ad-hoc 签名生成可启动产物。
+4. 将扩展运行文件与离线说明放入 `Contents/Resources/ChromeExtension`。
+5. 使用本地 ad-hoc 签名生成可启动产物。
 
 第一版不声称已完成公证或正式 Developer ID 签名。
 
@@ -91,6 +94,7 @@ pagecase/
 ├── commands/
 ├── processing/
 ├── results/
+├── ChromeExtension/
 └── preferences.json
 ```
 
@@ -245,6 +249,25 @@ Bridge 连接后持续运行：
 
 应用等待命令结果最多 3 秒。超时只显示失败，不重试可能产生副作用的 `openUrl`。
 
+### 8.1 首次连接准备
+
+`ExtensionPackageManager` 将应用包内的五个扩展文件复制到
+`Application Support/Pagecase/ChromeExtension`：
+
+1. 先检查内置文件完整。
+2. 复制到同一数据目录下的临时文件夹并逐文件比较字节。
+3. 使用目录替换发布；失败时恢复原扩展文件夹。
+4. 只有用户点击“显示扩展文件”才执行，不会打开 Chrome。
+
+`NativeHostManager` 负责 Host 清单：
+
+- 扩展标识必须精确匹配 32 位 `a-p` 字符。
+- 清单只允许一个 `chrome-extension://<id>/` 来源。
+- Bridge 路径必须指向当前 `.app` 内的可执行文件。
+- 写入后重新解码核对，并设置为 `0644`。
+- 应用移动后路径不一致会显示“需要重新配置”，不会静默使用旧路径。
+- 配置与移除都只由用户单次点击触发。
+
 ## 9. 应用状态管理
 
 `PagecaseCore` 提供：
@@ -290,6 +313,7 @@ Bridge 连接后持续运行：
 6. 无痕窗口和非 Web 协议不会进入本地文件。
 7. 应用、Bridge 和扩展没有外部网络请求。
 8. 开发与视觉验收不会加载扩展或连接真实 Chrome。
+9. 应用不会自动写入 Host 清单；隔离验收通过 `PAGECASE_NATIVE_HOST_ROOT` 改写目标目录。
 
 ## 12. 第一版可演进边界
 
