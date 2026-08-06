@@ -16,8 +16,11 @@
 ```bash
 swift build
 swift test
+swift run PagecaseCoreChecks
 swift build -c release
 ```
+
+当前仅安装 Command Line Tools 的机器缺少可正常枚举测试的 `xctest` 运行器；`swift test` 仍负责构建 Swift Testing 测试包，`PagecaseCoreChecks` 在本机实际执行同一组核心行为检查。完整 Xcode 环境仍保留 `Tests/PagecaseCoreTests` 供标准测试发现。
 
 测试覆盖：
 
@@ -76,9 +79,10 @@ tabGroups.update
 fetch(
 XMLHttpRequest
 WebSocket
-http://
-https://
+EventSource
 ```
+
+允许 `http://` 与 `https://` 作为页面协议白名单和测试夹具；它们本身不代表扩展发起网络请求。
 
 `manifest.json` 权限必须精确等于设计中的四项，不得出现通配 host 权限。
 
@@ -97,6 +101,8 @@ https://
 
 另外生成 500 个网页项的性能夹具。
 
+使用 `PAGECASE_PERFORMANCE=1` 启动隔离测试进程时，应用只载入 500 个网页项的性能夹具。
+
 ## 5. 视觉验收
 
 使用模拟数据启动 Release 应用，不连接 Chrome。至少检查：
@@ -109,6 +115,8 @@ https://
 - 未命名标签组、空资料库、离线和数据过期
 - 键盘焦点、`⌘K`、上下键、Return 与 Escape
 - 减少动态效果和减少透明度
+
+视觉验收可使用 `PAGECASE_APPEARANCE=light|dark` 强制单个测试进程的配色，不修改系统外观设置。
 
 截图必须确认：
 
