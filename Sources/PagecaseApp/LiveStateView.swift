@@ -59,6 +59,8 @@ struct LiveStateView: View {
         Text("\(state.source.label) · \(state.windows.count) 个窗口 · \(state.groupCount) 个标签组 · \(state.tabCount) 个网页 · 最后更新 \(state.source.capturedAt.formatted(date: .abbreviated, time: .shortened))")
           .font(.system(size: 12, design: .monospaced))
           .foregroundStyle(Palette.muted(colorScheme))
+
+        snapshotCoverageStatus(state)
       }
 
       Spacer()
@@ -71,6 +73,57 @@ struct LiveStateView: View {
       .buttonStyle(PrimaryButtonStyle())
       .accessibilityHint("复制当前现场到本地快照，不会改变 Chrome")
     }
+  }
+
+  private func snapshotCoverageStatus(_ state: LiveState) -> some View {
+    let coverage = SnapshotCoverageEvaluator.evaluate(
+      liveState: state,
+      snapshots: model.snapshots
+    )
+
+    return Label {
+      Text(snapshotCoverageMessage(coverage))
+        .lineLimit(1)
+    } icon: {
+      Image(systemName: snapshotCoverageSymbol(coverage))
+    }
+    .font(.system(size: 11, weight: .medium))
+    .foregroundStyle(snapshotCoverageColor(coverage))
+    .help("按完整网址、重复数量和标签组名称与颜色核对")
+  }
+
+  private func snapshotCoverageMessage(_ coverage: SnapshotCoverage) -> String {
+    if coverage.livePageCount == 0 {
+      return "当前没有需要保存的网页"
+    }
+    if coverage.isComplete, let snapshot = coverage.snapshot {
+      return "当前所有 \(coverage.livePageCount) 个网页已包含在「\(snapshot.name)」"
+    }
+    if let snapshot = coverage.snapshot {
+      return "还有 \(coverage.uncoveredPageCount) 个网页未包含在「\(snapshot.name)」"
+    }
+    return "尚未为当前 \(coverage.livePageCount) 个网页保存快照"
+  }
+
+  private func snapshotCoverageSymbol(_ coverage: SnapshotCoverage) -> String {
+    if coverage.livePageCount == 0 {
+      return "checkmark.circle"
+    }
+    return coverage.isComplete ? "checkmark.shield.fill" : "exclamationmark.shield"
+  }
+
+  private func snapshotCoverageColor(_ coverage: SnapshotCoverage) -> Color {
+    if coverage.livePageCount == 0 {
+      return Palette.muted(colorScheme)
+    }
+    if coverage.isComplete {
+      return colorScheme == .dark
+        ? Color(red: 0.49, green: 0.75, blue: 0.52)
+        : Color(red: 0.20, green: 0.49, blue: 0.25)
+    }
+    return colorScheme == .dark
+      ? Color(red: 0.88, green: 0.70, blue: 0.34)
+      : Color(red: 0.63, green: 0.43, blue: 0.08)
   }
 
   private func defaultSnapshotName(_ state: LiveState) -> String {
