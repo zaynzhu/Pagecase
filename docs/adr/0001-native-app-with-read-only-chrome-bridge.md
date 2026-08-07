@@ -7,4 +7,4 @@
 - 用户首次使用仍需在 Chrome 中手动加载扩展；页匣应用负责准备稳定的扩展文件夹，并在用户明确点击后配置 Native Messaging Host，不再要求终端命令。
 - 第一版必须同时测试 Swift 与 JavaScript 两套边界。
 - 开发和模拟验收可以完全绕开真实 Chrome。
-- 如果未来需要整组恢复，必须新增单独 ADR 并重新评估安全边界，不能在当前命令白名单中顺手加入。
+- 整组恢复的后续安全边界调整见 [ADR 0002](0002-restore-groups-with-new-tabs-only.md)。

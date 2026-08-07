@@ -1,8 +1,8 @@
-# 页匣 · Pagecase 第一版技术设计
+# 页匣 · Pagecase 0.2 技术设计
 
 ## 1. 架构结论
 
-第一版采用三个可独立测试的组件：
+当前架构采用三个可独立测试的组件：
 
 1. `PagecaseApp`：SwiftUI/AppKit 原生 macOS 应用。
 2. `PagecaseBridge`：Swift 编写的 Chrome Native Messaging Host。
@@ -79,7 +79,7 @@ pagecase/
 4. 将扩展运行文件与离线说明放入 `Contents/Resources/ChromeExtension`。
 5. 使用本地 ad-hoc 签名生成可启动产物。
 
-第一版不声称已完成公证或正式 Developer ID 签名。
+当前版本不声称已完成公证或正式 Developer ID 签名。
 
 ## 5. 数据目录
 
@@ -208,19 +208,19 @@ Native Messaging 连接存活时每 20 秒发送一次只读现场心跳，使�
 
 - `focusTab`：先聚焦指定窗口，再激活指定标签。
 - `openUrl`：在发出命令的同一 Chrome 用户配置中创建一个普通标签。
+- `restoreGroup`：校验全部网址后按顺序创建后台标签，只组合本次命令返回的标签标识，再设置快照中的组名和颜色。
 
 禁止存在以下调用：
 
 - `chrome.tabs.remove`
 - `chrome.tabs.move`
 - `chrome.tabs.discard`
-- `chrome.tabs.group`
 - `chrome.tabs.ungroup`
 - `chrome.windows.remove`
-- `chrome.tabGroups.update`
 - 任何自动触发的写操作
 
 `chrome.tabs.update` 只允许 `{ active: true }`，`chrome.windows.update` 只允许 `{ focused: true }`。
+`chrome.tabs.group` 与 `chrome.tabGroups.update` 只能存在于 `restoreGroup`，前者的 `tabIds` 必须精确来自该命令刚完成的 `chrome.tabs.create` 返回值。
 
 ## 8. Native Messaging 协议
 
@@ -236,6 +236,7 @@ Bridge 到扩展：
 
 - `focusTab`
 - `openUrl`
+- `restoreGroup`
 - `pong`
 
 Bridge 连接后持续运行：
@@ -293,7 +294,7 @@ Bridge 连接后持续运行：
   重复次数、标签组显示名称和颜色作为保守匹配键。
 - 覆盖判断忽略 Chrome 运行时窗口、标签和标签组标识，以及活动、声音和丢弃等易变状态。
   候选优先选择未覆盖网页最少的快照，数量相同时选择创建时间最近者。
-- 搜索在内存中执行；第一版按 2,000 个网页项设计，不引入数据库。
+- 搜索在内存中执行；当前版本按 2,000 个网页项设计，不引入数据库。
 - 大列表使用懒加载容器；单个分组首次只建立 40 行视图，搜索首次只建立 50 行视图，其余结果按需分批显示。
 - 搜索结果保留一个显式选中标识；上下键可跨 50 项批次继续移动，并自动滚动到选中项。
 
@@ -319,12 +320,12 @@ Bridge 连接后持续运行：
 2. 保存快照只复制本地数据。
 3. 实时更新永远不会改写快照文件。
 4. Chrome 写动作只能由用户界面单次点击产生，且来源必须仍在 30 秒新鲜度窗口内。
-5. 写动作只有定位已有标签和创建一个标签。
+5. 写动作只有定位已有标签、创建一个标签，以及经确认后用新建标签恢复一个分组。
 6. 无痕窗口和非 Web 协议不会进入本地文件。
 7. 应用、Bridge 和扩展没有外部网络请求。
 8. 开发与视觉验收不会加载扩展或连接真实 Chrome。
 9. 应用不会自动写入 Host 清单；隔离验收通过 `PAGECASE_NATIVE_HOST_ROOT` 改写目标目录。
 
-## 12. 第一版可演进边界
+## 12. 可演进边界
 
-未来可以在不破坏 schema v1 的前提下增加 SQLite 搜索索引、整组恢复或其他浏览器适配器，但第一版不为这些能力预建抽象。只有真实使用证明 JSON 搜索或单浏览器边界不足时再演进。
+未来可以在不破坏 schema v1 的前提下增加 SQLite 搜索索引或其他浏览器适配器，但当前版本不为这些能力预建抽象。只有真实使用证明 JSON 搜索或单浏览器边界不足时再演进。
