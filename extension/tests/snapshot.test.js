@@ -73,6 +73,34 @@ test("未知标签组颜色降级为 grey", () => {
   assert.equal(state.windows[0].groups[0].color, "grey")
 })
 
+test("标签组资料竞态时暂按未分组保存", () => {
+  const state = buildLiveState({
+    sourceId: "source",
+    groups: [],
+    windows: [
+      {
+        id: 1,
+        type: "normal",
+        incognito: false,
+        tabs: [
+          tab(
+            1,
+            1,
+            99,
+            0,
+            "刚进入新分组",
+            "https://example.com/group-race"
+          )
+        ]
+      }
+    ]
+  })
+
+  assert.equal(state.windows[0].groups.length, 0)
+  assert.equal(state.windows[0].ungroupedTabs.length, 1)
+  assert.equal(state.windows[0].ungroupedTabs[0].groupId, null)
+})
+
 test("防抖只执行最后一次调用", () => {
   const callbacks = new Map()
   let nextId = 0

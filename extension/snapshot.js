@@ -39,7 +39,7 @@ export function buildLiveState({
       for (const tab of tabs) {
         const page = pageFromTab(tab)
         if (tab.groupId === UNGROUPED_ID || !groupMap.has(tab.groupId)) {
-          ungroupedTabs.push(page)
+          ungroupedTabs.push({ ...page, groupId: null })
           continue
         }
         const current = groupedTabs.get(tab.groupId) ?? []
