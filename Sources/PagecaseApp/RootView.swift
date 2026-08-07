@@ -163,7 +163,7 @@ struct RootView: View {
         .font(.system(size: 10, weight: .semibold))
       Text("数据只保存在本机")
       Text("·")
-      Text("不会自动关闭、移动或重组 Chrome 标签")
+      Text("不会自动关闭、移动或重组已有 Chrome 标签")
       Spacer()
       if model.isDemoMode {
         Text(model.isPerformanceMode ? "500 页性能演示" : "演示数据")
