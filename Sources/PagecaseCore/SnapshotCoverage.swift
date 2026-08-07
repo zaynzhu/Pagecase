@@ -24,6 +24,26 @@ public struct SnapshotCoverage: Equatable, Sendable {
   }
 }
 
+public struct GroupSnapshotCoverage: Equatable, Sendable {
+  public let snapshot: SavedSnapshot?
+  public let pageCount: Int
+  public let uncoveredPageCount: Int
+
+  public init(
+    snapshot: SavedSnapshot?,
+    pageCount: Int,
+    uncoveredPageCount: Int
+  ) {
+    self.snapshot = snapshot
+    self.pageCount = pageCount
+    self.uncoveredPageCount = uncoveredPageCount
+  }
+
+  public var isComplete: Bool {
+    snapshot != nil && uncoveredPageCount == 0
+  }
+}
+
 public enum SnapshotCoverageEvaluator {
   public static func evaluate(
     liveState: LiveState,
@@ -35,9 +55,9 @@ public enum SnapshotCoverageEvaluator {
       .map { snapshot in
         (
           snapshot: snapshot,
-          uncoveredPageCount: uncoveredPageCount(
-            liveKeys: liveKeys,
-            snapshotKeys: backupKeys(in: snapshot.windows)
+          uncoveredPageCount: uncoveredItemCount(
+            liveItems: liveKeys,
+            savedItems: backupKeys(in: snapshot.windows)
           )
         )
       }
@@ -62,20 +82,67 @@ public enum SnapshotCoverageEvaluator {
     )
   }
 
-  private static func uncoveredPageCount(
-    liveKeys: [BackupKey],
-    snapshotKeys: [BackupKey]
+  public static func evaluate(
+    group: TabGroup,
+    sourceId: String,
+    snapshots: [SavedSnapshot]
+  ) -> GroupSnapshotCoverage {
+    let liveURLs = group.tabs.map(\.url)
+    let candidates = snapshots
+      .filter { $0.sourceId == sourceId }
+      .flatMap { snapshot in
+        snapshot.windows.flatMap { window in
+          window.groups
+            .filter {
+              $0.displayTitle == group.displayTitle
+                && $0.color == group.color
+            }
+            .map { candidateGroup in
+              (
+                snapshot: snapshot,
+                uncoveredPageCount: uncoveredItemCount(
+                  liveItems: liveURLs,
+                  savedItems: candidateGroup.tabs.map(\.url)
+                )
+              )
+            }
+        }
+      }
+
+    guard let best = candidates.min(by: { left, right in
+      if left.uncoveredPageCount != right.uncoveredPageCount {
+        return left.uncoveredPageCount < right.uncoveredPageCount
+      }
+      return left.snapshot.createdAt > right.snapshot.createdAt
+    }) else {
+      return GroupSnapshotCoverage(
+        snapshot: nil,
+        pageCount: liveURLs.count,
+        uncoveredPageCount: liveURLs.count
+      )
+    }
+
+    return GroupSnapshotCoverage(
+      snapshot: best.snapshot,
+      pageCount: liveURLs.count,
+      uncoveredPageCount: best.uncoveredPageCount
+    )
+  }
+
+  private static func uncoveredItemCount<Item: Hashable>(
+    liveItems: [Item],
+    savedItems: [Item]
   ) -> Int {
-    var available = Dictionary(grouping: snapshotKeys, by: { $0 })
+    var available = Dictionary(grouping: savedItems, by: { $0 })
       .mapValues(\.count)
     var uncovered = 0
 
-    for key in liveKeys {
-      guard let count = available[key], count > 0 else {
+    for item in liveItems {
+      guard let count = available[item], count > 0 else {
         uncovered += 1
         continue
       }
-      available[key] = count - 1
+      available[item] = count - 1
     }
 
     return uncovered

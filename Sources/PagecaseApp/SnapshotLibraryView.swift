@@ -141,12 +141,29 @@ struct SnapshotLibraryView: View {
           ForEach(snapshot.windows) { window in
             WindowSection(
               window: window,
-              sourceId: snapshot.sourceId,
               action: { page in
                 model.open(page: page, sourceId: snapshot.sourceId)
               },
               actionTitle: model.snapshotActionTitle(for: snapshot.sourceId),
-              actionEnabled: model.isSourceActionAvailable(snapshot.sourceId)
+              actionEnabled: model.isSourceActionAvailable(snapshot.sourceId),
+              isGroupExpanded: { groupId in
+                model.isGroupExpanded(
+                  scope: "snapshot:\(snapshot.id)",
+                  windowId: window.id,
+                  groupId: groupId
+                )
+              },
+              toggleGroupExpansion: { groupId in
+                model.toggleGroupExpansion(
+                  scope: "snapshot:\(snapshot.id)",
+                  windowId: window.id,
+                  groupId: groupId
+                )
+              },
+              groupCoverage: { _ in nil },
+              groupActionTitle: nil,
+              groupActionEnabled: false,
+              groupAction: nil
             )
           }
         }

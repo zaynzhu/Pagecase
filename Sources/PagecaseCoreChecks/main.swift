@@ -116,6 +116,14 @@ func runChecks() throws -> Int {
   guard let firstGroup = changedGroups.first else {
     throw CheckFailure.failed("演示数据缺少标签组夹具")
   }
+  passed += try check(
+    SnapshotCoverageEvaluator.evaluate(
+      group: firstGroup,
+      sourceId: firstState.source.id,
+      snapshots: [exactSnapshot]
+    ).isComplete,
+    "完整快照未覆盖实时标签组"
+  )
   changedGroups[0] = TabGroup(
     id: firstGroup.id,
     title: "其他语境",
@@ -285,6 +293,19 @@ func runChecks() throws -> Int {
     localPassed += try check(
       try snapshotsRepository.loadSnapshots().count == afterImport.count,
       "损坏资料库造成了部分写入"
+    )
+
+    let preferencesRepository = DisplayPreferencesRepository(paths: paths)
+    let collapsedKey = DisplayPreferences.groupKey(
+      scope: "live:\(firstState.source.id)",
+      windowId: firstWindow.id,
+      groupId: firstGroup.id
+    )
+    let preferences = DisplayPreferences(collapsedGroupKeys: [collapsedKey])
+    try preferencesRepository.save(preferences)
+    localPassed += try check(
+      try preferencesRepository.load() == preferences,
+      "标签组折叠状态未持久保存"
     )
 
     return localPassed

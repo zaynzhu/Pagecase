@@ -65,6 +65,7 @@ final class AppModel: ObservableObject {
   @Published var extensionId = ""
   @Published var nativeHostStatus: NativeHostStatus
   @Published private(set) var sourceAvailabilityById: [String: SourceAvailability] = [:]
+  @Published private(set) var collapsedGroupKeys: Set<String> = []
   @Published var notice: AppNotice?
 
   let paths: AppPaths
@@ -77,6 +78,7 @@ final class AppModel: ObservableObject {
   private let commandRepository: CommandRepository?
   private let nativeHostManager: NativeHostManager
   private let extensionPackageManager: ExtensionPackageManager
+  private let displayPreferencesRepository: DisplayPreferencesRepository
   private var pendingCommands: [String: Date] = [:]
   private var contentSignature: String?
   private var handledSearchFocusRequest = 0
@@ -154,6 +156,7 @@ final class AppModel: ObservableObject {
       sourceDirectory: bundledExtensionDirectory,
       destinationDirectory: preparedExtensionDirectory
     )
+    displayPreferencesRepository = DisplayPreferencesRepository(paths: paths)
     self.extensionId = initialNativeHostStatus.extensionId ?? ""
 
     let repositories: (SnapshotRepository?, CommandRepository?, Error?)
@@ -170,6 +173,12 @@ final class AppModel: ObservableObject {
     commandRepository = repositories.1
     if let error = repositories.2 {
       notice = AppNotice(kind: .error, message: error.localizedDescription)
+    }
+
+    do {
+      collapsedGroupKeys = try displayPreferencesRepository.load().collapsedGroupKeys
+    } catch {
+      notice = AppNotice(kind: .error, message: "读取折叠状态失败：\(error.localizedDescription)")
     }
 
     if isDemoMode {
@@ -264,6 +273,44 @@ final class AppModel: ObservableObject {
 
   func snapshotActionTitle(for sourceId: String) -> String {
     isSourceActionAvailable(sourceId) ? "打开" : "Chrome 未连接"
+  }
+
+  func isGroupExpanded(
+    scope: String,
+    windowId: Int,
+    groupId: Int?
+  ) -> Bool {
+    let key = DisplayPreferences.groupKey(
+      scope: scope,
+      windowId: windowId,
+      groupId: groupId
+    )
+    return !collapsedGroupKeys.contains(key)
+  }
+
+  func toggleGroupExpansion(
+    scope: String,
+    windowId: Int,
+    groupId: Int?
+  ) {
+    let key = DisplayPreferences.groupKey(
+      scope: scope,
+      windowId: windowId,
+      groupId: groupId
+    )
+    var updatedKeys = collapsedGroupKeys
+    if !updatedKeys.insert(key).inserted {
+      updatedKeys.remove(key)
+    }
+
+    do {
+      try displayPreferencesRepository.save(
+        DisplayPreferences(collapsedGroupKeys: updatedKeys)
+      )
+      collapsedGroupKeys = updatedKeys
+    } catch {
+      notice = AppNotice(kind: .error, message: "保存折叠状态失败：\(error.localizedDescription)")
+    }
   }
 
   func isSearchActionAvailable(_ result: SearchResult) -> Bool {

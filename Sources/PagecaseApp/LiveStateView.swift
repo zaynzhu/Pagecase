@@ -16,12 +16,35 @@ struct LiveStateView: View {
             ForEach(state.windows) { window in
               WindowSection(
                 window: window,
-                sourceId: state.source.id,
                 action: { page in
                   model.focus(page: page, sourceId: state.source.id)
                 },
                 actionTitle: model.liveActionTitle(for: state.source.id),
-                actionEnabled: model.isSourceActionAvailable(state.source.id)
+                actionEnabled: model.isSourceActionAvailable(state.source.id),
+                isGroupExpanded: { groupId in
+                  model.isGroupExpanded(
+                    scope: "live:\(state.source.id)",
+                    windowId: window.id,
+                    groupId: groupId
+                  )
+                },
+                toggleGroupExpansion: { groupId in
+                  model.toggleGroupExpansion(
+                    scope: "live:\(state.source.id)",
+                    windowId: window.id,
+                    groupId: groupId
+                  )
+                },
+                groupCoverage: { group in
+                  SnapshotCoverageEvaluator.evaluate(
+                    group: group,
+                    sourceId: state.source.id,
+                    snapshots: model.snapshots
+                  )
+                },
+                groupActionTitle: nil,
+                groupActionEnabled: false,
+                groupAction: nil
               )
             }
           }
@@ -136,10 +159,15 @@ struct LiveStateView: View {
 
 struct WindowSection: View {
   let window: BrowserWindow
-  let sourceId: String
   let action: (PageItem) -> Void
   let actionTitle: String
   let actionEnabled: Bool
+  let isGroupExpanded: (Int?) -> Bool
+  let toggleGroupExpansion: (Int?) -> Void
+  let groupCoverage: (TabGroup) -> GroupSnapshotCoverage?
+  let groupActionTitle: String?
+  let groupActionEnabled: Bool
+  let groupAction: ((TabGroup) -> Void)?
 
   @Environment(\.colorScheme) private var colorScheme
 
@@ -174,9 +202,19 @@ struct WindowSection: View {
             color: group.color.displayColor,
             pages: group.tabs,
             collapsed: group.collapsed,
+            isExpanded: isGroupExpanded(group.id),
+            toggleExpansion: {
+              toggleGroupExpansion(group.id)
+            },
+            saveCoverage: groupCoverage(group),
             actionTitle: actionTitle,
             actionEnabled: actionEnabled,
-            action: action
+            action: action,
+            groupActionTitle: groupActionTitle,
+            groupActionEnabled: groupActionEnabled,
+            groupAction: groupAction.map { action in
+              { action(group) }
+            }
           )
         }
 
@@ -186,9 +224,17 @@ struct WindowSection: View {
             color: ChromeGroupColor.grey.displayColor,
             pages: window.ungroupedTabs,
             collapsed: false,
+            isExpanded: isGroupExpanded(nil),
+            toggleExpansion: {
+              toggleGroupExpansion(nil)
+            },
+            saveCoverage: nil,
             actionTitle: actionTitle,
             actionEnabled: actionEnabled,
-            action: action
+            action: action,
+            groupActionTitle: nil,
+            groupActionEnabled: false,
+            groupAction: nil
           )
         }
       }
@@ -203,12 +249,17 @@ struct PageGroupView: View {
   let color: Color
   let pages: [PageItem]
   let collapsed: Bool
+  let isExpanded: Bool
+  let toggleExpansion: () -> Void
+  let saveCoverage: GroupSnapshotCoverage?
   let actionTitle: String
   let actionEnabled: Bool
   let action: (PageItem) -> Void
+  let groupActionTitle: String?
+  let groupActionEnabled: Bool
+  let groupAction: (() -> Void)?
 
   @Environment(\.colorScheme) private var colorScheme
-  @State private var isExpanded = true
   @State private var visiblePageCount = pageBatchSize
 
   var body: some View {
@@ -217,41 +268,62 @@ struct PageGroupView: View {
         .frame(width: 4)
 
       VStack(spacing: 0) {
-        Button {
-          isExpanded.toggle()
-        } label: {
-          HStack(spacing: 9) {
-            Circle()
-              .fill(color)
-              .frame(width: 7, height: 7)
+        HStack(spacing: 0) {
+          Button(action: toggleExpansion) {
+            HStack(spacing: 9) {
+              Circle()
+                .fill(color)
+                .frame(width: 7, height: 7)
 
-            Text(title)
-              .font(.system(size: 13, weight: .semibold))
+              Text(title)
+                .font(.system(size: 13, weight: .semibold))
 
-            Text("\(pages.count)")
-              .font(.system(size: 10, design: .monospaced))
-              .foregroundStyle(Palette.muted(colorScheme))
+              Text("\(pages.count)")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(Palette.muted(colorScheme))
 
-            if collapsed {
-              Text("Chrome 中已折叠")
-                .font(.system(size: 10))
+              if let saveCoverage {
+                groupCoverageLabel(saveCoverage)
+              }
+
+              if collapsed {
+                Text("Chrome 中已折叠")
+                  .font(.system(size: 10))
+                  .foregroundStyle(Palette.muted(colorScheme))
+              }
+
+              Spacer()
+
+              Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(Palette.muted(colorScheme))
             }
-
-            Spacer()
-
-            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-              .font(.system(size: 9, weight: .semibold))
-              .foregroundStyle(Palette.muted(colorScheme))
+            .padding(.horizontal, 14)
+            .frame(height: 39)
+            .contentShape(Rectangle())
           }
-          .padding(.horizontal, 14)
-          .frame(height: 39)
-          .contentShape(Rectangle())
+          .buttonStyle(.plain)
+          .accessibilityLabel("\(title)，\(pages.count) 个网页")
+          .accessibilityValue(isExpanded ? "已展开" : "已折叠")
+          .accessibilityHint(isExpanded ? "折叠标签组" : "展开标签组")
+
+          if let groupActionTitle, let groupAction {
+            Divider()
+              .frame(height: 18)
+
+            Button(action: groupAction) {
+              Text(groupActionTitle)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Palette.muted(colorScheme))
+                .padding(.horizontal, 12)
+                .frame(height: 39)
+            }
+            .buttonStyle(.plain)
+            .disabled(!groupActionEnabled)
+            .opacity(groupActionEnabled ? 1 : 0.62)
+            .accessibilityLabel("\(title)，\(groupActionTitle)")
+          }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(title)，\(pages.count) 个网页")
-        .accessibilityValue(isExpanded ? "已展开" : "已折叠")
-        .accessibilityHint(isExpanded ? "折叠标签组" : "展开标签组")
 
         if isExpanded {
           Divider()
@@ -310,5 +382,47 @@ struct PageGroupView: View {
 
   private var hasMorePages: Bool {
     visiblePageCount < pages.count
+  }
+
+  private func groupCoverageLabel(_ coverage: GroupSnapshotCoverage) -> some View {
+    Label {
+      Text(groupCoverageMessage(coverage))
+    } icon: {
+      Image(systemName: coverage.isComplete ? "checkmark.circle.fill" : "exclamationmark.circle")
+    }
+    .font(.system(size: 10, weight: .medium))
+    .foregroundStyle(groupCoverageColor(coverage))
+    .help(groupCoverageHelp(coverage))
+  }
+
+  private func groupCoverageMessage(_ coverage: GroupSnapshotCoverage) -> String {
+    if coverage.isComplete {
+      return "已保存"
+    }
+    if coverage.snapshot != nil {
+      return "\(coverage.uncoveredPageCount) 个未保存"
+    }
+    return "未保存"
+  }
+
+  private func groupCoverageHelp(_ coverage: GroupSnapshotCoverage) -> String {
+    if coverage.isComplete, let snapshot = coverage.snapshot {
+      return "这个标签组已完整包含在「\(snapshot.name)」"
+    }
+    if let snapshot = coverage.snapshot {
+      return "还有 \(coverage.uncoveredPageCount) 个网页未包含在「\(snapshot.name)」"
+    }
+    return "尚未在同来源快照中找到这个标签组"
+  }
+
+  private func groupCoverageColor(_ coverage: GroupSnapshotCoverage) -> Color {
+    if coverage.isComplete {
+      return colorScheme == .dark
+        ? Color(red: 0.49, green: 0.75, blue: 0.52)
+        : Color(red: 0.20, green: 0.49, blue: 0.25)
+    }
+    return colorScheme == .dark
+      ? Color(red: 0.88, green: 0.70, blue: 0.34)
+      : Color(red: 0.63, green: 0.43, blue: 0.08)
   }
 }

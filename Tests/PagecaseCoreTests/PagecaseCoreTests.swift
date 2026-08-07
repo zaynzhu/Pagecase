@@ -135,6 +135,120 @@ func snapshotCoveragePreservesContextDuplicatesAndClosedPages() throws {
 }
 
 @Test
+func groupCoveragePreservesDuplicateURLsAndDoesNotMergeGroups() {
+  let liveGroup = TabGroup(
+    id: 10,
+    title: "研究",
+    color: .blue,
+    collapsed: false,
+    order: 0,
+    tabs: [
+      PageItem(
+        id: 1,
+        windowId: 1,
+        groupId: 10,
+        index: 0,
+        title: "重复一",
+        url: "https://example.com/shared"
+      ),
+      PageItem(
+        id: 2,
+        windowId: 1,
+        groupId: 10,
+        index: 1,
+        title: "重复二",
+        url: "https://example.com/shared"
+      )
+    ]
+  )
+  let firstSavedGroup = TabGroup(
+    id: 20,
+    title: "研究",
+    color: .blue,
+    collapsed: false,
+    order: 0,
+    tabs: [
+      PageItem(
+        id: 3,
+        windowId: 2,
+        groupId: 20,
+        index: 0,
+        title: "只保存一份",
+        url: "https://example.com/shared"
+      )
+    ]
+  )
+  let secondSavedGroup = TabGroup(
+    id: 21,
+    title: "研究",
+    color: .blue,
+    collapsed: false,
+    order: 1,
+    tabs: [
+      PageItem(
+        id: 4,
+        windowId: 2,
+        groupId: 21,
+        index: 1,
+        title: "另一组的一份",
+        url: "https://example.com/shared"
+      )
+    ]
+  )
+  let splitSnapshot = SavedSnapshot(
+    id: "split-groups",
+    name: "同名组不可合并",
+    sourceId: "source",
+    windows: [
+      BrowserWindow(
+        id: 2,
+        order: 0,
+        focused: false,
+        groups: [firstSavedGroup, secondSavedGroup],
+        ungroupedTabs: []
+      )
+    ]
+  )
+
+  let splitCoverage = SnapshotCoverageEvaluator.evaluate(
+    group: liveGroup,
+    sourceId: "source",
+    snapshots: [splitSnapshot]
+  )
+  #expect(splitCoverage.uncoveredPageCount == 1)
+  #expect(!splitCoverage.isComplete)
+
+  let exactSnapshot = SavedSnapshot(
+    id: "exact-group",
+    name: "完整分组",
+    sourceId: "source",
+    windows: [
+      BrowserWindow(
+        id: 1,
+        order: 0,
+        focused: true,
+        groups: [liveGroup],
+        ungroupedTabs: []
+      )
+    ]
+  )
+  #expect(
+    SnapshotCoverageEvaluator.evaluate(
+      group: liveGroup,
+      sourceId: "source",
+      snapshots: [splitSnapshot, exactSnapshot]
+    ).isComplete
+  )
+  #expect(
+    SnapshotCoverageEvaluator.evaluate(
+      group: liveGroup,
+      sourceId: "other-source",
+      snapshots: [exactSnapshot]
+    ).snapshot == nil
+  )
+}
+
+@Test
 func searchMatchesTitleGroupDomainURLAndSnapshotName() {
   let states = DemoData.liveStates(referenceDate: referenceDate)
   let snapshots = DemoData.snapshots(referenceDate: referenceDate)
@@ -201,6 +315,30 @@ func liveStateAndSnapshotRemainIndependent() throws {
     #expect(savedSnapshot.id == snapshot.id)
     #expect(savedSnapshot.tabCount == firstState.tabCount)
     #expect(savedSnapshot.tabCount != replacement.tabCount)
+  }
+}
+
+@Test
+func displayPreferencesPersistCollapsedGroups() throws {
+  try withTemporaryPaths { paths in
+    let repository = DisplayPreferencesRepository(paths: paths)
+    let key = DisplayPreferences.groupKey(
+      scope: "live:source",
+      windowId: 20,
+      groupId: 30
+    )
+    let preferences = DisplayPreferences(collapsedGroupKeys: [key])
+
+    try repository.save(preferences)
+
+    #expect(try repository.load() == preferences)
+    #expect(
+      DisplayPreferences.groupKey(
+        scope: "snapshot:saved",
+        windowId: 20,
+        groupId: nil
+      ) == "snapshot:saved:window:20:group:ungrouped"
+    )
   }
 }
 
