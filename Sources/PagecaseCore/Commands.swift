@@ -3,6 +3,7 @@ import Foundation
 public enum BrowserCommandAction: String, Codable, Sendable {
   case focusTab
   case openUrl
+  case restoreGroup
 }
 
 public struct BrowserCommand: Codable, Equatable, Identifiable, Sendable {
@@ -14,6 +15,9 @@ public struct BrowserCommand: Codable, Equatable, Identifiable, Sendable {
   public let tabId: Int?
   public let windowId: Int?
   public let url: String?
+  public let groupTitle: String?
+  public let groupColor: ChromeGroupColor?
+  public let urls: [String]?
 
   public init(
     schemaVersion: Int = 1,
@@ -23,7 +27,10 @@ public struct BrowserCommand: Codable, Equatable, Identifiable, Sendable {
     createdAt: Date = Date(),
     tabId: Int? = nil,
     windowId: Int? = nil,
-    url: String? = nil
+    url: String? = nil,
+    groupTitle: String? = nil,
+    groupColor: ChromeGroupColor? = nil,
+    urls: [String]? = nil
   ) {
     self.schemaVersion = schemaVersion
     self.id = id
@@ -33,6 +40,9 @@ public struct BrowserCommand: Codable, Equatable, Identifiable, Sendable {
     self.tabId = tabId
     self.windowId = windowId
     self.url = url
+    self.groupTitle = groupTitle
+    self.groupColor = groupColor
+    self.urls = urls
   }
 
   public func validate() throws {
@@ -42,12 +52,34 @@ public struct BrowserCommand: Codable, Equatable, Identifiable, Sendable {
 
     switch action {
     case .focusTab:
-      guard tabId != nil, windowId != nil, url == nil else {
+      guard tabId != nil,
+            windowId != nil,
+            url == nil,
+            groupTitle == nil,
+            groupColor == nil,
+            urls == nil else {
         throw StoreError.invalidFile("定位命令参数不完整")
       }
     case .openUrl:
-      guard tabId == nil, windowId == nil, let url, Self.isWebURL(url) else {
+      guard tabId == nil,
+            windowId == nil,
+            let url,
+            Self.isWebURL(url),
+            groupTitle == nil,
+            groupColor == nil,
+            urls == nil else {
         throw StoreError.invalidFile("打开命令必须包含有效的 http/https 网址")
+      }
+    case .restoreGroup:
+      guard tabId == nil,
+            windowId == nil,
+            url == nil,
+            groupTitle != nil,
+            groupColor != nil,
+            let urls,
+            !urls.isEmpty,
+            urls.allSatisfy(Self.isWebURL) else {
+        throw StoreError.invalidFile("恢复标签组命令参数不完整")
       }
     }
   }

@@ -315,6 +315,32 @@ func runChecks() throws -> Int {
   let decoded = try NativeMessageFramer.decode(NativeOutboundMessage.self, from: framed)
   passed += try check(decoded.type == "pong", "Native Messaging 往返失败")
 
+  let restoreCommand = BrowserCommand(
+    sourceId: "source",
+    action: .restoreGroup,
+    groupTitle: "开发",
+    groupColor: .blue,
+    urls: [
+      "https://example.com/first",
+      "https://example.com/second"
+    ]
+  )
+  try restoreCommand.validate()
+  let restoreFramed = try NativeMessageFramer.encode(
+    NativeOutboundMessage(command: restoreCommand)
+  )
+  let decodedRestore = try NativeMessageFramer.decode(
+    NativeOutboundMessage.self,
+    from: restoreFramed
+  )
+  passed += try check(
+    decodedRestore.type == "restoreGroup"
+      && decodedRestore.groupTitle == "开发"
+      && decodedRestore.groupColor == "blue"
+      && decodedRestore.urls?.count == 2,
+    "恢复整组命令往返失败"
+  )
+
   do {
     try BrowserCommand(
       sourceId: "source",

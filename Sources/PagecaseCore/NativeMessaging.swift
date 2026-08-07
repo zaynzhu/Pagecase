@@ -33,6 +33,9 @@ public struct NativeOutboundMessage: Codable, Sendable {
   public let tabId: Int?
   public let windowId: Int?
   public let url: String?
+  public let groupTitle: String?
+  public let groupColor: String?
+  public let urls: [String]?
 
   public init(command: BrowserCommand) {
     self.type = command.action.rawValue
@@ -42,6 +45,9 @@ public struct NativeOutboundMessage: Codable, Sendable {
     self.tabId = command.tabId
     self.windowId = command.windowId
     self.url = command.url
+    self.groupTitle = command.groupTitle
+    self.groupColor = command.groupColor?.rawValue
+    self.urls = command.urls
   }
 
   public init(type: String) {
@@ -52,6 +58,9 @@ public struct NativeOutboundMessage: Codable, Sendable {
     self.tabId = nil
     self.windowId = nil
     self.url = nil
+    self.groupTitle = nil
+    self.groupColor = nil
+    self.urls = nil
   }
 }
 

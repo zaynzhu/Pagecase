@@ -645,6 +645,16 @@ func commandValidationAllowsOnlyExpectedShapes() throws {
     action: .openUrl,
     url: "https://example.com"
   ).validate()
+  try BrowserCommand(
+    sourceId: "source",
+    action: .restoreGroup,
+    groupTitle: "开发",
+    groupColor: .blue,
+    urls: [
+      "https://example.com/first",
+      "https://example.com/second"
+    ]
+  ).validate()
 
   do {
     try BrowserCommand(
@@ -653,6 +663,19 @@ func commandValidationAllowsOnlyExpectedShapes() throws {
       url: "file:///tmp/private"
     ).validate()
     Issue.record("非 Web 协议应被拒绝")
+  } catch {
+    #expect(error is StoreError)
+  }
+
+  do {
+    try BrowserCommand(
+      sourceId: "source",
+      action: .restoreGroup,
+      groupTitle: "无效",
+      groupColor: .blue,
+      urls: ["file:///tmp/private"]
+    ).validate()
+    Issue.record("恢复整组中的非 Web 协议应被拒绝")
   } catch {
     #expect(error is StoreError)
   }
@@ -702,6 +725,25 @@ func nativeMessageRoundTripAndLengthValidation() throws {
   let decoded = try NativeMessageFramer.decode(NativeOutboundMessage.self, from: framed)
 
   #expect(decoded.type == "pong")
+
+  let restoreMessage = NativeOutboundMessage(
+    command: BrowserCommand(
+      sourceId: "source",
+      action: .restoreGroup,
+      groupTitle: "开发",
+      groupColor: .blue,
+      urls: ["https://example.com"]
+    )
+  )
+  let restoreFramed = try NativeMessageFramer.encode(restoreMessage)
+  let restoreDecoded = try NativeMessageFramer.decode(
+    NativeOutboundMessage.self,
+    from: restoreFramed
+  )
+  #expect(restoreDecoded.type == "restoreGroup")
+  #expect(restoreDecoded.groupTitle == "开发")
+  #expect(restoreDecoded.groupColor == "blue")
+  #expect(restoreDecoded.urls == ["https://example.com"])
 
   var invalid = framed
   invalid.removeLast()

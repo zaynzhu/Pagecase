@@ -52,7 +52,7 @@ enum SourceAvailability: Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
-  static let applicationVersion = "0.1.0"
+  static let applicationVersion = "0.2.0"
 
   @Published var selection: NavigationItem = .live
   @Published var liveStates: [LiveState] = []
@@ -273,6 +273,10 @@ final class AppModel: ObservableObject {
 
   func snapshotActionTitle(for sourceId: String) -> String {
     isSourceActionAvailable(sourceId) ? "打开" : "Chrome 未连接"
+  }
+
+  func snapshotGroupActionTitle(for sourceId: String) -> String {
+    isSourceActionAvailable(sourceId) ? "恢复整组" : "Chrome 未连接"
   }
 
   func isGroupExpanded(
@@ -523,6 +527,19 @@ final class AppModel: ObservableObject {
     )
   }
 
+  func restore(group: TabGroup, sourceId: String) {
+    enqueue(
+      BrowserCommand(
+        sourceId: sourceId,
+        action: .restoreGroup,
+        groupTitle: group.title,
+        groupColor: group.color,
+        urls: group.tabs.map(\.url)
+      ),
+      demoMessage: "演示模式不会在 Chrome 中恢复标签组"
+    )
+  }
+
   func exportLibrary() {
     guard let snapshotRepository else {
       return
@@ -640,7 +657,9 @@ final class AppModel: ObservableObject {
 
     do {
       try commandRepository.enqueue(command)
-      pendingCommands[command.id] = Date()
+      pendingCommands[command.id] = Date().addingTimeInterval(
+        command.action == .restoreGroup ? 30 : 3
+      )
       notice = AppNotice(kind: .success, message: "命令已发送，等待 Chrome 响应")
     } catch {
       notice = AppNotice(kind: .error, message: "命令发送失败：\(error.localizedDescription)")
@@ -653,7 +672,7 @@ final class AppModel: ObservableObject {
     }
 
     let now = Date()
-    for (commandId, createdAt) in pendingCommands {
+    for (commandId, deadline) in pendingCommands {
       do {
         if let result = try commandRepository.loadResult(commandId: commandId) {
           pendingCommands.removeValue(forKey: commandId)
@@ -665,9 +684,9 @@ final class AppModel: ObservableObject {
           continue
         }
 
-        if now.timeIntervalSince(createdAt) >= 3 {
+        if now >= deadline {
           pendingCommands.removeValue(forKey: commandId)
-          notice = AppNotice(kind: .warning, message: "Chrome 未在 3 秒内响应，请检查连接状态")
+          notice = AppNotice(kind: .warning, message: "Chrome 未及时响应，请检查连接状态")
         }
       } catch {
         notice = AppNotice(kind: .error, message: "读取命令结果失败：\(error.localizedDescription)")

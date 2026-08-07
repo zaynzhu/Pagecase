@@ -1,11 +1,22 @@
 import PagecaseCore
 import SwiftUI
 
+private struct GroupRestoreTarget: Identifiable {
+  let snapshotId: String
+  let sourceId: String
+  let group: TabGroup
+
+  var id: String {
+    "\(snapshotId)-\(group.id)"
+  }
+}
+
 struct SnapshotLibraryView: View {
   @ObservedObject var model: AppModel
   @Environment(\.colorScheme) private var colorScheme
   @State private var renameTarget: SavedSnapshot?
   @State private var deleteTarget: SavedSnapshot?
+  @State private var restoreTarget: GroupRestoreTarget?
 
   var body: some View {
     Group {
@@ -54,6 +65,29 @@ struct SnapshotLibraryView: View {
       }
     } message: {
       Text("只删除本地快照，不会影响 Chrome。")
+    }
+    .confirmationDialog(
+      restoreDialogTitle,
+      isPresented: Binding(
+        get: { restoreTarget != nil },
+        set: { if !$0 { restoreTarget = nil } }
+      ),
+      titleVisibility: .visible
+    ) {
+      if let restoreTarget {
+        Button("打开 \(restoreTarget.group.tabs.count) 个网页") {
+          model.restore(
+            group: restoreTarget.group,
+            sourceId: restoreTarget.sourceId
+          )
+          self.restoreTarget = nil
+        }
+      }
+      Button("取消", role: .cancel) {
+        restoreTarget = nil
+      }
+    } message: {
+      Text("将在 Chrome 中按原顺序新建并组合这些网页，不会关闭、移动或改变任何已有标签。")
     }
   }
 
@@ -161,9 +195,19 @@ struct SnapshotLibraryView: View {
                 )
               },
               groupCoverage: { _ in nil },
-              groupActionTitle: nil,
-              groupActionEnabled: false,
-              groupAction: nil
+              groupActionTitle: model.snapshotGroupActionTitle(
+                for: snapshot.sourceId
+              ),
+              groupActionEnabled: model.isSourceActionAvailable(
+                snapshot.sourceId
+              ),
+              groupAction: { group in
+                restoreTarget = GroupRestoreTarget(
+                  snapshotId: snapshot.id,
+                  sourceId: snapshot.sourceId,
+                  group: group
+                )
+              }
             )
           }
         }
@@ -175,5 +219,12 @@ struct SnapshotLibraryView: View {
     } else {
       EmptyStateView(symbol: "archivebox", title: "选择一个快照", message: "")
     }
+  }
+
+  private var restoreDialogTitle: String {
+    guard let restoreTarget else {
+      return "恢复标签组？"
+    }
+    return "恢复「\(restoreTarget.group.displayTitle)」？"
   }
 }
