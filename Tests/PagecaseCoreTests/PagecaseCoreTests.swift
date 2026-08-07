@@ -319,6 +319,24 @@ func liveStateAndSnapshotRemainIndependent() throws {
 }
 
 @Test
+func deleteSnapshotRemovesOnlyTheSelectedSnapshot() throws {
+  try withTemporaryPaths { paths in
+    let repository = try SnapshotRepository(paths: paths)
+    let state = try #require(DemoData.liveStates().first)
+
+    try repository.saveLiveState(state)
+    let deleted = try repository.createSnapshot(from: state, name: "准备删除")
+    let retained = try repository.createSnapshot(from: state, name: "继续保留")
+
+    try repository.deleteSnapshot(id: deleted.id)
+
+    let snapshots = try repository.loadSnapshots()
+    #expect(snapshots.map(\.id) == [retained.id])
+    #expect(try repository.loadLiveStates().first?.source.id == state.source.id)
+  }
+}
+
+@Test
 func displayPreferencesPersistCollapsedGroups() throws {
   try withTemporaryPaths { paths in
     let repository = DisplayPreferencesRepository(paths: paths)

@@ -47,7 +47,7 @@ struct SnapshotLibraryView: View {
       }
     }
     .confirmationDialog(
-      "删除这个快照？",
+      deleteDialogTitle,
       isPresented: Binding(
         get: { deleteTarget != nil },
         set: { if !$0 { deleteTarget = nil } }
@@ -64,7 +64,7 @@ struct SnapshotLibraryView: View {
         deleteTarget = nil
       }
     } message: {
-      Text("只删除本地快照，不会影响 Chrome。")
+      Text(deleteDialogMessage)
     }
     .confirmationDialog(
       restoreDialogTitle,
@@ -156,20 +156,30 @@ struct SnapshotLibraryView: View {
 
             Spacer()
 
-            Menu {
-              Button("重命名") {
-                renameTarget = snapshot
+            HStack(spacing: 8) {
+              Menu {
+                Button("重命名") {
+                  renameTarget = snapshot
+                }
+              } label: {
+                Image(systemName: "ellipsis")
+                  .frame(width: 28, height: 28)
               }
-              Divider()
-              Button("删除快照", role: .destructive) {
+              .menuStyle(.borderlessButton)
+              .fixedSize()
+              .help("更多快照操作")
+
+              Button(role: .destructive) {
                 deleteTarget = snapshot
+              } label: {
+                Label("删除快照", systemImage: "trash")
+                  .font(.system(size: 11, weight: .medium))
               }
-            } label: {
-              Image(systemName: "ellipsis")
-                .frame(width: 28, height: 28)
+              .buttonStyle(.bordered)
+              .controlSize(.small)
+              .help("从本机删除这份快照")
+              .accessibilityHint("删除前会再次确认，不会影响 Chrome")
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
           }
 
           ForEach(snapshot.windows) { window in
@@ -226,5 +236,19 @@ struct SnapshotLibraryView: View {
       return "恢复标签组？"
     }
     return "恢复「\(restoreTarget.group.displayTitle)」？"
+  }
+
+  private var deleteDialogTitle: String {
+    guard let deleteTarget else {
+      return "删除这个快照？"
+    }
+    return "删除「\(deleteTarget.name)」？"
+  }
+
+  private var deleteDialogMessage: String {
+    guard let deleteTarget else {
+      return "只删除本地快照，不会影响 Chrome。"
+    }
+    return "将从本机永久删除这份包含 \(deleteTarget.tabCount) 个网页的快照。此操作无法撤销，但不会影响 Chrome。"
   }
 }

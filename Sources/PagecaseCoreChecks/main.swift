@@ -295,6 +295,17 @@ func runChecks() throws -> Int {
       "损坏资料库造成了部分写入"
     )
 
+    try snapshotsRepository.deleteSnapshot(id: snapshot.id)
+    let afterDelete = try snapshotsRepository.loadSnapshots()
+    localPassed += try check(
+      afterDelete.count == 1 && !afterDelete.contains(where: { $0.id == snapshot.id }),
+      "删除快照时未精确移除目标"
+    )
+    localPassed += try check(
+      try snapshotsRepository.loadLiveStates().first?.tabCount == 3,
+      "删除快照意外改变了实时现场"
+    )
+
     let preferencesRepository = DisplayPreferencesRepository(paths: paths)
     let collapsedKey = DisplayPreferences.groupKey(
       scope: "live:\(firstState.source.id)",

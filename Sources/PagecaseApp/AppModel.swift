@@ -52,7 +52,7 @@ enum SourceAvailability: Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
-  static let applicationVersion = "0.2.0"
+  static let applicationVersion = "0.2.1"
 
   @Published var selection: NavigationItem = .live
   @Published var liveStates: [LiveState] = []

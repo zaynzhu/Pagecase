@@ -18,7 +18,7 @@
 |---|---|
 | `swift build` | 通过 |
 | `swift test --enable-swift-testing --disable-xctest` | 测试包构建通过 |
-| `swift run PagecaseCoreChecks` | 43 项通过 |
+| `swift run PagecaseCoreChecks` | 45 项通过 |
 | 扩展语法检查 | 通过 |
 | 扩展 Node 测试 | 10 项通过 |
 | 扩展危险 API 与整组恢复边界扫描 | 通过 |
@@ -79,6 +79,7 @@ nativeMessaging
 - 每个实时标签组独立显示“已保存 / N 个未保存 / 未保存”
 - 折叠状态写入版本化本机偏好，完全退出并重新打开后仍保持
 - 快照分组的“恢复整组”入口、网页数量确认和取消路径
+- 快照详情的可见删除按钮、快照名称与网页数量确认、取消后资料保持不变
 - 500 页性能夹具
 - 键盘与 VoiceOver 可访问名称
 
@@ -92,6 +93,7 @@ nativeMessaging
 - [保存后的完整快照覆盖](../artifacts/qa-snapshot-coverage.png)
 - [分组保存状态](../artifacts/qa-group-status.png)
 - [恢复整组确认](../artifacts/qa-group-restore.png)
+- [快照删除入口](../artifacts/qa-snapshot-delete-button.png)
 
 界面遵循 `minimalist-ui` 转译后的原生规则：温暖单色、系统字体、1px 分隔、低饱和分组脊线、克制圆角，无渐变、重阴影、玻璃拟态或卡片墙。
 
