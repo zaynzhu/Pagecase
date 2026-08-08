@@ -8,7 +8,7 @@
 2. `PagecaseBridge`：Swift 编写的 Chrome Native Messaging Host。
 3. `extension`：Manifest V3 Chrome 扩展。
 
-应用负责界面、搜索、快照和本地文件；扩展负责查询 Chrome 元数据和执行两种明确动作；Bridge 负责可靠地转发消息并原子落盘。
+应用负责界面、搜索、快照和本地文件；扩展负责查询 Chrome 元数据和执行三种明确动作；Bridge 负责可靠地转发消息并原子落盘。
 
 不使用 Electron、WebView、本地 HTTP 服务、云端服务或第三方依赖。
 
@@ -21,7 +21,7 @@ flowchart LR
     A -->|"复制"| S["snapshots/*.json"]
     A -->|"写入单次命令"| Q["commands/*.json"]
     Q -->|"文件事件"| B
-    B -->|"focusTab / openUrl"| E
+    B -->|"focusTab / openUrl / restoreGroup"| E
     E -->|"结果"| B
     B -->|"原子写入"| R["results/*.json"]
     A -->|"读取结果"| R
@@ -53,13 +53,15 @@ pagecase/
 │   ├── snapshot.js
 │   ├── README.txt
 │   └── tests/
-├── Fixtures/
 ├── Resources/
-│   └── Info.plist
+│   ├── Info.plist
+│   └── generate-icon.swift
 ├── scripts/
 │   ├── build-app.sh
+│   ├── check-bridge.mjs
 │   ├── install-native-host.sh
-│   └── uninstall-native-host.sh
+│   ├── uninstall-native-host.sh
+│   └── validate-extension.sh
 └── docs/
 ```
 
@@ -248,7 +250,7 @@ Bridge 连接后持续运行：
 5. 将命令原子移动至 `processing/` 后发送。
 6. 收到结果后写入 `results/` 并清理处理中命令。
 
-应用等待命令结果最多 3 秒。超时只显示失败，不重试可能产生副作用的 `openUrl`。
+应用等待 `focusTab` 与 `openUrl` 结果最多 3 秒，等待可能创建多个标签的 `restoreGroup` 最多 30 秒。超时只显示失败，不自动重试可能产生副作用的 `openUrl` 或 `restoreGroup`。
 
 ### 8.1 首次连接准备
 
@@ -293,7 +295,7 @@ Bridge 连接后持续运行：
 - `SnapshotCoverageEvaluator` 在内存中比较同来源实时现场与快照；使用完整网址、
   重复次数、标签组显示名称和颜色作为保守匹配键。
 - 覆盖判断忽略 Chrome 运行时窗口、标签和标签组标识，以及活动、声音和丢弃等易变状态。
-  候选优先选择未覆盖网页最少的快照，数量相同时选择创建时间最近者。
+  候选优先选择未覆盖网页最少的快照，数量相同时选择创建时间较晚者。
 - 搜索在内存中执行；当前版本按 2,000 个网页项设计，不引入数据库。
 - 大列表使用懒加载容器；单个分组首次只建立 40 行视图，搜索首次只建立 50 行视图，其余结果按需分批显示。
 - 搜索结果保留一个显式选中标识；上下键可跨 50 项批次继续移动，并自动滚动到选中项。
@@ -308,7 +310,7 @@ Bridge 连接后持续运行：
 4. 域名匹配
 5. 完整网址匹配
 6. 实时项优先于快照项
-7. 同类结果按最近捕获或快照时间倒序
+7. 同类结果按捕获时间或快照时间倒序
 
 规范化使用大小写与变音符号不敏感比较，不修改原始显示文本。
 

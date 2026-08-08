@@ -15,7 +15,7 @@
 
 ```bash
 swift build
-swift test
+swift test --enable-swift-testing --disable-xctest
 swift run PagecaseCoreChecks
 swift build -c release
 ```
@@ -53,9 +53,10 @@ swift build -c release
 必须通过：
 
 ```bash
-node --check extension/background.js
-node --check extension/snapshot.js
-node --test extension/tests/*.test.js
+npm run check:extension
+npm run test:extension
+npm run test:bridge
+./scripts/validate-extension.sh
 ```
 
 测试覆盖：
@@ -106,10 +107,10 @@ EventSource
 
 - 2 个浏览器来源
 - 3 个窗口
-- 5 个标签组，其中一个未命名、一个已折叠
-- 24 个网页项
-- 4 个未分组网页项
-- 2 个完全相同的网址，位于不同标签组
+- 9 个标签组，其中 3 个未命名、3 个已折叠
+- 33 个网页项
+- 6 个未分组网页项
+- 同一来源内 3 个完全相同的网址，位于两个未分组区域
 - 固定、活动、播放声音和已丢弃状态各至少一个
 - 2 个快照，其中一个来源离线
 
@@ -132,6 +133,7 @@ EventSource
 - 过期实时项显示“数据已过期”并禁用，离线快照项显示“Chrome 未连接”并禁用
 - 搜索 Return 不得绕过过期或离线状态，设置页应分别统计已连接与过期来源
 - 新增未保存网页后显示未覆盖数量，保存并完成磁盘核对后立即切换为完整覆盖
+- 快照详情直接显示删除入口，确认框包含快照名称与网页数量，取消后资料保持不变
 - 键盘焦点、`⌘K`、上下键、Return 与 Escape
 - 500 项搜索结果跨 50 项渲染批次的选择与自动滚动
 - 减少动态效果和减少透明度
