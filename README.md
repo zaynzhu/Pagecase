@@ -18,7 +18,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.4.0-2F3437?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.5.0-2F3437?style=flat-square)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-787774?style=flat-square&logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-6-D97757?style=flat-square&logo=swift&logoColor=white)
 
@@ -39,7 +39,8 @@
 - **快速找回网页与分组** — 搜索标题、域名、完整网址、标签组和快照名称；标签组作为独立结果，可直接查看或从快照确认恢复。
 - **按需恢复** — 定位仍在 Chrome 中的网页、从快照打开单页，或按原顺序恢复完整标签组。
 - **保留整理语境** — 保存窗口、组名、颜色、顺序和重复网址，不把不同语境中的相同网址强行去重。
-- **本地资料管理** — 支持快照重命名、带确认的删除，以及版本化 JSON 资料库导入与导出。
+- **版本序列收纳** — 同一标签组的多次保存折叠为一个版本序列，最新版优先，旧版本仍可展开、重命名或删除。
+- **本地资料管理** — 支持带确认的删除，以及版本化 JSON 资料库导入与导出。
 - **原生且轻量** — 使用 SwiftUI、AppKit 与极小的 Manifest V3 连接器，不使用 Electron、WebView、数据库或云服务。
 
 ---
@@ -105,6 +106,17 @@ open "dist/页匣.app"
 标签组快照保留组名、颜色、网页顺序和重复网址。完整现场状态只由完整现场快照判断，避免把一份标签组快照误认为整个 Chrome 已经保存。
 
 ![单个标签组保存状态](artifacts/qa-group-save-states.png)
+
+### 浏览标签组的历史版本
+
+同一个 Chrome 标签组反复保存后，快照侧栏会把这些独立快照收纳到一个版本序列：
+
+- 版本序列默认折叠并直接打开最新版，不让旧版本挤满侧栏。
+- 点击箭头可以展开较早版本；每个版本仍保留自己的名称、日期、网页数量和完整内容。
+- 完整现场快照始终独立显示；标签组名称或颜色改变后也会形成新的版本序列。
+- 重命名或删除只影响当前选中的快照，不会合并、覆盖或自动清理其他版本。
+
+![标签组版本序列](artifacts/qa-snapshot-series.png)
 
 ### 搜索并找回网页或标签组
 
@@ -203,7 +215,7 @@ npm run test:bridge
 ./scripts/build-app.sh
 ```
 
-当前 0.4.0 版本已通过 59 项 Swift 核心行为检查、10 项扩展测试、Bridge 协议往返、扩展危险 API 扫描、Release 构建、视觉验收和 500 页性能验收。
+当前 0.5.0 版本已通过 67 项 Swift 核心行为检查、10 项扩展测试、Bridge 协议往返、扩展危险 API 扫描、Release 构建、视觉验收和 500 页性能验收。
 
 > [!NOTE]
 > 仅安装 Command Line Tools 的环境无法正常枚举 Swift Testing 测试；`swift test` 仍负责编译测试包，`PagecaseCoreChecks` 会实际执行同一组关键行为检查。

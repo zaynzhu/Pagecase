@@ -24,6 +24,14 @@ public enum DemoData {
     let states = liveStates(referenceDate: referenceDate)
     let groupWindow = states[0].windows[0]
     let savedGroup = groupWindow.groups[0]
+    let earlierGroup = TabGroup(
+      id: savedGroup.id,
+      title: savedGroup.title,
+      color: savedGroup.color,
+      collapsed: savedGroup.collapsed,
+      order: savedGroup.order,
+      tabs: Array(savedGroup.tabs.dropLast())
+    )
     return [
       SavedSnapshot(
         id: "demo-snapshot-development-group",
@@ -47,6 +55,22 @@ public enum DemoData {
         createdAt: referenceDate.addingTimeInterval(-86_400 * 4),
         sourceId: states[0].source.id,
         windows: states[0].windows
+      ),
+      SavedSnapshot(
+        id: "demo-snapshot-development-group-early",
+        name: "开发 · 较早版本",
+        createdAt: referenceDate.addingTimeInterval(-86_400 * 7),
+        sourceId: states[0].source.id,
+        scope: .group,
+        windows: [
+          BrowserWindow(
+            id: groupWindow.id,
+            order: groupWindow.order,
+            focused: groupWindow.focused,
+            groups: [earlierGroup],
+            ungroupedTabs: []
+          )
+        ]
       ),
       SavedSnapshot(
         id: "demo-snapshot-trip",

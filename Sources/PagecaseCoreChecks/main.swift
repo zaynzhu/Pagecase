@@ -69,6 +69,101 @@ func runChecks() throws -> Int {
   passed += try check(duplicateCount == 3, "重复网址被意外合并")
 
   let snapshots = DemoData.snapshots(referenceDate: referenceDate)
+  let libraryItems = SnapshotLibraryOrganizer.organize(snapshots)
+  let developmentSeries = SnapshotLibraryOrganizer.groupSeries(
+    containing: "demo-snapshot-development-group-early",
+    in: snapshots
+  )
+  passed += try check(snapshots.count == 4, "版本序列演示快照数量不正确")
+  passed += try check(libraryItems.count == 3, "标签组版本没有收纳为一个资料库条目")
+  passed += try check(developmentSeries?.title == "开发", "标签组版本序列标题错误")
+  passed += try check(
+    developmentSeries?.snapshots.map(\.id) == [
+      "demo-snapshot-development-group",
+      "demo-snapshot-development-group-early"
+    ],
+    "标签组版本没有按时间倒序排列"
+  )
+  passed += try check(
+    developmentSeries?.snapshots.map(\.tabCount) == [3, 2],
+    "标签组版本内容被意外合并"
+  )
+  passed += try check(
+    libraryItems.filter { item in
+      if case .snapshot = item {
+        return true
+      }
+      return false
+    }.count == 2,
+    "完整现场快照被错误归入版本序列"
+  )
+  guard let series = developmentSeries,
+        let seriesWindow = series.latestSnapshot.windows.first,
+        let seriesGroup = seriesWindow.groups.first else {
+    throw CheckFailure.failed("标签组版本序列缺少语境夹具")
+  }
+  let renamedSeriesGroup = TabGroup(
+    id: seriesGroup.id,
+    title: "另一组开发资料",
+    color: seriesGroup.color,
+    collapsed: seriesGroup.collapsed,
+    order: seriesGroup.order,
+    tabs: seriesGroup.tabs
+  )
+  let renamedSeriesSnapshot = SavedSnapshot(
+    id: "renamed-series-context",
+    name: "名称变化后的快照",
+    createdAt: referenceDate.addingTimeInterval(-120),
+    sourceId: series.latestSnapshot.sourceId,
+    scope: .group,
+    windows: [
+      BrowserWindow(
+        id: seriesWindow.id,
+        order: seriesWindow.order,
+        focused: seriesWindow.focused,
+        groups: [renamedSeriesGroup],
+        ungroupedTabs: []
+      )
+    ]
+  )
+  passed += try check(
+    SnapshotLibraryOrganizer.organize([
+      series.latestSnapshot,
+      renamedSeriesSnapshot
+    ]).count == 2,
+    "名称变化后的标签组被错误归入原版本序列"
+  )
+  let recoloredSeriesGroup = TabGroup(
+    id: seriesGroup.id,
+    title: seriesGroup.title,
+    color: .red,
+    collapsed: seriesGroup.collapsed,
+    order: seriesGroup.order,
+    tabs: seriesGroup.tabs
+  )
+  let recoloredSeriesSnapshot = SavedSnapshot(
+    id: "recolored-series-context",
+    name: "颜色变化后的快照",
+    createdAt: referenceDate.addingTimeInterval(-180),
+    sourceId: series.latestSnapshot.sourceId,
+    scope: .group,
+    windows: [
+      BrowserWindow(
+        id: seriesWindow.id,
+        order: seriesWindow.order,
+        focused: seriesWindow.focused,
+        groups: [recoloredSeriesGroup],
+        ungroupedTabs: []
+      )
+    ]
+  )
+  passed += try check(
+    SnapshotLibraryOrganizer.organize([
+      series.latestSnapshot,
+      recoloredSeriesSnapshot
+    ]).count == 2,
+    "颜色变化后的标签组被错误归入原版本序列"
+  )
   guard let exactSnapshot = snapshots.first(where: {
     $0.sourceId == firstState.source.id && $0.scope == .fullState
   }),

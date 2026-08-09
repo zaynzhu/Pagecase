@@ -18,7 +18,7 @@ Let pages leave memory, not your reach.
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.4.0-2F3437?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.5.0-2F3437?style=flat-square)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-787774?style=flat-square&logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-6-D97757?style=flat-square&logo=swift&logoColor=white)
 
@@ -39,7 +39,8 @@ Let pages leave memory, not your reach.
 - **Fast page and group retrieval** — Searches titles, domains, full URLs, tab groups, and snapshot names; groups appear as first-class results that can be viewed or explicitly restored from snapshots.
 - **Restore on demand** — Focuses a page still open in Chrome, opens one page from a snapshot, or restores a complete tab group in order.
 - **Preserved context** — Keeps windows, group names, colors, order, and duplicate URLs instead of merging identical URLs from different contexts.
-- **Local library management** — Supports snapshot renaming, confirmed deletion, and versioned JSON library import and export.
+- **Group version series** — Collects repeated saves of the same tab group into one series, prioritizing the latest snapshot while keeping every older version available.
+- **Local library management** — Supports confirmed deletion and versioned JSON library import and export.
 - **Native and lightweight** — Uses SwiftUI, AppKit, and a tiny Manifest V3 connector without Electron, WebView, a database, or cloud services.
 
 ---
@@ -105,6 +106,17 @@ Each tab group shows its own saved state:
 A group snapshot preserves the group name, color, page order, and duplicate URLs. Complete-state coverage is evaluated only against full-state snapshots, so one saved group is never presented as proof that all of Chrome has been saved.
 
 ![Tab group save states](artifacts/qa-group-save-states.png)
+
+### Browse earlier group versions
+
+After the same Chrome tab group is saved repeatedly, the snapshot sidebar collects those independent snapshots into one version series:
+
+- A series starts collapsed and opens its latest version by default, keeping older saves from crowding the sidebar.
+- Its disclosure control reveals earlier versions with their own names, dates, page counts, and complete contents.
+- Full-state snapshots always remain standalone. A changed group name or color starts a separate series.
+- Renaming or deleting affects only the selected snapshot and never merges, overwrites, or automatically cleans up another version.
+
+![Tab group version series](artifacts/qa-snapshot-series.png)
 
 ### Search for and retrieve a page or group
 
@@ -203,7 +215,7 @@ npm run test:bridge
 ./scripts/build-app.sh
 ```
 
-Pagecase 0.4.0 has passed 59 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, the dangerous-extension-API scan, Release builds, visual acceptance, and the 500-page performance run.
+Pagecase 0.5.0 has passed 67 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, the dangerous-extension-API scan, Release builds, visual acceptance, and the 500-page performance run.
 
 > [!NOTE]
 > A Command Line Tools-only environment cannot enumerate Swift Testing tests correctly. `swift test` still compiles the test package, while `PagecaseCoreChecks` executes the same critical behavior checks.

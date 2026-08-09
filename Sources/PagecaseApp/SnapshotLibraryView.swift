@@ -7,6 +7,7 @@ struct SnapshotLibraryView: View {
   @State private var renameTarget: SavedSnapshot?
   @State private var deleteTarget: SavedSnapshot?
   @State private var restoreTarget: GroupRestoreTarget?
+  @State private var expandedSeriesIds: Set<String> = []
 
   var body: some View {
     Group {
@@ -83,8 +84,16 @@ struct SnapshotLibraryView: View {
 
   private var index: some View {
     VStack(alignment: .leading, spacing: 0) {
-      Text("快照")
-        .font(.system(size: 24, weight: .semibold, design: .serif))
+      HStack(alignment: .firstTextBaseline) {
+        Text("快照")
+          .font(.system(size: 24, weight: .semibold, design: .serif))
+
+        Spacer()
+
+        Text("\(model.snapshots.count) 份")
+          .font(.system(size: 9, design: .monospaced))
+          .foregroundStyle(Palette.muted(colorScheme))
+      }
         .padding(.horizontal, 18)
         .padding(.top, 24)
         .padding(.bottom, 16)
@@ -93,41 +102,189 @@ struct SnapshotLibraryView: View {
 
       ScrollView {
         LazyVStack(spacing: 4) {
-          ForEach(model.snapshots) { snapshot in
-            Button {
-              model.selectedSnapshotId = snapshot.id
-            } label: {
-              VStack(alignment: .leading, spacing: 6) {
-                Text(snapshot.name)
-                  .font(.system(size: 13, weight: .semibold, design: .serif))
-                  .lineLimit(2)
-                  .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack {
-                  Text(snapshotScopeTitle(snapshot))
-                  Text(snapshot.createdAt.formatted(date: .abbreviated, time: .omitted))
-                  Spacer()
-                  Text("\(snapshot.tabCount) 页")
-                }
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(Palette.muted(colorScheme))
-              }
-              .padding(10)
-              .contentShape(Rectangle())
+          ForEach(model.snapshotLibraryItems) { item in
+            switch item {
+            case .snapshot(let snapshot):
+              snapshotIndexRow(snapshot)
+            case .groupSeries(let series):
+              groupSeriesIndexRow(series)
             }
-            .buttonStyle(.plain)
-            .background(
-              model.selectedSnapshotId == snapshot.id
-                ? Palette.selection(colorScheme)
-                : .clear
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 7))
           }
         }
         .padding(8)
       }
+      .onAppear {
+        expandSelectedSeriesIfNeeded()
+      }
+      .onChange(of: model.selectedSnapshotId) { _, _ in
+        expandSelectedSeriesIfNeeded()
+      }
     }
     .background(Palette.surface(colorScheme))
+  }
+
+  private func snapshotIndexRow(_ snapshot: SavedSnapshot) -> some View {
+    Button {
+      model.selectedSnapshotId = snapshot.id
+    } label: {
+      VStack(alignment: .leading, spacing: 6) {
+        Text(snapshot.name)
+          .font(.system(size: 13, weight: .semibold, design: .serif))
+          .lineLimit(2)
+          .frame(maxWidth: .infinity, alignment: .leading)
+
+        HStack {
+          Text(snapshotScopeTitle(snapshot))
+          Text(snapshot.createdAt.formatted(date: .abbreviated, time: .omitted))
+          Spacer()
+          Text("\(snapshot.tabCount) 页")
+        }
+        .font(.system(size: 9, design: .monospaced))
+        .foregroundStyle(Palette.muted(colorScheme))
+      }
+      .padding(10)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .background(
+      model.selectedSnapshotId == snapshot.id
+        ? Palette.selection(colorScheme)
+        : .clear
+    )
+    .clipShape(RoundedRectangle(cornerRadius: 7))
+  }
+
+  private func groupSeriesIndexRow(_ series: GroupSnapshotSeries) -> some View {
+    let isExpanded = expandedSeriesIds.contains(series.id)
+
+    return VStack(spacing: 3) {
+      HStack(spacing: 0) {
+        Button {
+          model.selectedSnapshotId = series.latestSnapshot.id
+        } label: {
+          HStack(alignment: .top, spacing: 9) {
+            Circle()
+              .fill(series.color.displayColor)
+              .frame(width: 7, height: 7)
+              .padding(.top, 5)
+
+            VStack(alignment: .leading, spacing: 4) {
+              Text(series.title)
+                .font(.system(size: 13, weight: .semibold, design: .serif))
+                .lineLimit(1)
+
+              Text(series.latestSnapshot.name)
+                .font(.system(size: 10))
+                .foregroundStyle(Palette.muted(colorScheme))
+                .lineLimit(1)
+
+              HStack {
+                Text(series.snapshots.count == 1 ? "标签组快照" : "\(series.snapshots.count) 个版本")
+                Text(series.latestSnapshot.createdAt.formatted(date: .abbreviated, time: .omitted))
+                Spacer()
+                Text("\(series.latestSnapshot.tabCount) 页")
+              }
+              .font(.system(size: 9, design: .monospaced))
+              .foregroundStyle(Palette.muted(colorScheme))
+            }
+          }
+          .padding(10)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+          model.selectedSnapshotId == series.latestSnapshot.id
+            ? Palette.selection(colorScheme)
+            : .clear
+        )
+        .accessibilityLabel("\(series.title)，最新版本，\(series.latestSnapshot.tabCount) 个网页")
+
+        if series.snapshots.count > 1 {
+          Divider()
+            .frame(height: 28)
+
+          Button {
+            toggleSeriesExpansion(series.id)
+          } label: {
+            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+              .font(.system(size: 9, weight: .semibold))
+              .foregroundStyle(Palette.muted(colorScheme))
+              .frame(width: 34)
+              .frame(maxHeight: .infinity)
+              .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel(isExpanded ? "折叠\(series.title)的历史版本" : "展开\(series.title)的历史版本")
+        }
+      }
+      .clipShape(RoundedRectangle(cornerRadius: 7))
+
+      if isExpanded {
+        VStack(spacing: 2) {
+          ForEach(Array(series.snapshots.dropFirst())) { snapshot in
+            olderVersionIndexRow(snapshot)
+          }
+        }
+        .padding(.leading, 16)
+        .overlay(alignment: .leading) {
+          Rectangle()
+            .fill(Palette.border(colorScheme))
+            .frame(width: 1)
+            .padding(.leading, 7)
+        }
+      }
+    }
+  }
+
+  private func olderVersionIndexRow(_ snapshot: SavedSnapshot) -> some View {
+    Button {
+      model.selectedSnapshotId = snapshot.id
+    } label: {
+      VStack(alignment: .leading, spacing: 5) {
+        Text(snapshot.name)
+          .font(.system(size: 11, weight: .medium, design: .serif))
+          .lineLimit(1)
+
+        HStack {
+          Text(snapshot.createdAt.formatted(date: .abbreviated, time: .omitted))
+          Spacer()
+          Text("\(snapshot.tabCount) 页")
+        }
+        .font(.system(size: 9, design: .monospaced))
+        .foregroundStyle(Palette.muted(colorScheme))
+      }
+      .padding(.horizontal, 10)
+      .padding(.vertical, 8)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .background(
+      model.selectedSnapshotId == snapshot.id
+        ? Palette.selection(colorScheme)
+        : .clear
+    )
+    .clipShape(RoundedRectangle(cornerRadius: 6))
+    .accessibilityLabel("\(snapshot.name)，较早版本，\(snapshot.tabCount) 个网页")
+  }
+
+  private func toggleSeriesExpansion(_ seriesId: String) {
+    if !expandedSeriesIds.insert(seriesId).inserted {
+      expandedSeriesIds.remove(seriesId)
+    }
+  }
+
+  private func expandSelectedSeriesIfNeeded() {
+    guard let selectedSnapshotId = model.selectedSnapshotId,
+          let series = SnapshotLibraryOrganizer.groupSeries(
+            containing: selectedSnapshotId,
+            in: model.snapshots
+          ),
+          series.latestSnapshot.id != selectedSnapshotId else {
+      return
+    }
+    expandedSeriesIds.insert(series.id)
   }
 
   @ViewBuilder

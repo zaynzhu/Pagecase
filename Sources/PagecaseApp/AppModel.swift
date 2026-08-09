@@ -63,7 +63,7 @@ struct GroupFocusRequest: Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
-  static let applicationVersion = "0.4.0"
+  static let applicationVersion = "0.5.0"
 
   @Published var selection: NavigationItem = .live
   @Published var liveStates: [LiveState] = []
@@ -218,6 +218,10 @@ final class AppModel: ObservableObject {
       return selected
     }
     return snapshots.first
+  }
+
+  var snapshotLibraryItems: [SnapshotLibraryItem] {
+    SnapshotLibraryOrganizer.organize(snapshots)
   }
 
   var searchResults: [SearchResult] {
@@ -548,7 +552,14 @@ final class AppModel: ObservableObject {
     }
 
     do {
+      let nextVersionId = SnapshotLibraryOrganizer.groupSeries(
+        containing: snapshot.id,
+        in: snapshots
+      )?.snapshots.first(where: { $0.id != snapshot.id })?.id
       try snapshotRepository.deleteSnapshot(id: snapshot.id)
+      if selectedSnapshotId == snapshot.id {
+        selectedSnapshotId = nextVersionId
+      }
       refresh(force: true)
       notice = AppNotice(kind: .success, message: "快照已删除")
     } catch {

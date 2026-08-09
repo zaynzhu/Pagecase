@@ -36,6 +36,119 @@ func demoDataKeepsWindowsGroupsAndDuplicateURLs() throws {
 }
 
 @Test
+func snapshotLibraryCollectsGroupVersionsWithoutMergingSnapshots() throws {
+  let snapshots = DemoData.snapshots(referenceDate: referenceDate)
+  let items = SnapshotLibraryOrganizer.organize(snapshots)
+  let firstItem = try #require(items.first)
+  guard case .groupSeries(let series) = firstItem else {
+    Issue.record("最新的标签组版本没有形成版本序列")
+    return
+  }
+
+  #expect(snapshots.count == 4)
+  #expect(items.count == 3)
+  #expect(series.title == "开发")
+  #expect(series.snapshots.map(\.id) == [
+    "demo-snapshot-development-group",
+    "demo-snapshot-development-group-early"
+  ])
+  #expect(series.snapshots.map(\.tabCount) == [3, 2])
+  #expect(
+    SnapshotLibraryOrganizer.groupSeries(
+      containing: "demo-snapshot-development-group-early",
+      in: snapshots
+    ) == series
+  )
+  #expect(items.filter { item in
+    if case .snapshot = item {
+      return true
+    }
+    return false
+  }.count == 2)
+}
+
+@Test
+func snapshotLibraryKeepsChangedGroupContextInAnotherSeries() throws {
+  let state = try #require(DemoData.liveStates(referenceDate: referenceDate).first)
+  let window = try #require(state.windows.first)
+  let group = try #require(window.groups.first)
+  let first = SavedSnapshot(
+    id: "first-group-version",
+    name: "第一个版本",
+    createdAt: referenceDate,
+    sourceId: state.source.id,
+    scope: .group,
+    windows: [
+      BrowserWindow(
+        id: window.id,
+        order: window.order,
+        focused: window.focused,
+        groups: [group],
+        ungroupedTabs: []
+      )
+    ]
+  )
+  let changedGroup = TabGroup(
+    id: group.id,
+    title: group.title,
+    color: .red,
+    collapsed: group.collapsed,
+    order: group.order,
+    tabs: group.tabs
+  )
+  let changed = SavedSnapshot(
+    id: "changed-group-context",
+    name: "颜色变化后的版本",
+    createdAt: referenceDate.addingTimeInterval(-60),
+    sourceId: state.source.id,
+    scope: .group,
+    windows: [
+      BrowserWindow(
+        id: window.id,
+        order: window.order,
+        focused: window.focused,
+        groups: [changedGroup],
+        ungroupedTabs: []
+      )
+    ]
+  )
+  let renamedGroup = TabGroup(
+    id: group.id,
+    title: "另一组开发资料",
+    color: group.color,
+    collapsed: group.collapsed,
+    order: group.order,
+    tabs: group.tabs
+  )
+  let renamed = SavedSnapshot(
+    id: "renamed-group-context",
+    name: "名称变化后的版本",
+    createdAt: referenceDate.addingTimeInterval(-120),
+    sourceId: state.source.id,
+    scope: .group,
+    windows: [
+      BrowserWindow(
+        id: window.id,
+        order: window.order,
+        focused: window.focused,
+        groups: [renamedGroup],
+        ungroupedTabs: []
+      )
+    ]
+  )
+
+  let series = SnapshotLibraryOrganizer.organize([first, changed, renamed]).compactMap {
+    item -> GroupSnapshotSeries? in
+    guard case .groupSeries(let series) = item else {
+      return nil
+    }
+    return series
+  }
+  #expect(series.count == 3)
+  #expect(series.allSatisfy { $0.snapshots.count == 1 })
+}
+
+@Test
 func snapshotCoveragePreservesContextDuplicatesAndClosedPages() throws {
   let state = try #require(DemoData.liveStates(referenceDate: referenceDate).first)
   let exactSnapshot = SavedSnapshot(
