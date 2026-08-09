@@ -239,6 +239,13 @@ func groupCoveragePreservesDuplicateURLsAndDoesNotMergeGroups() {
       snapshots: [splitSnapshot, exactSnapshot]
     ).isComplete
   )
+  let exactCoverage = SnapshotCoverageEvaluator.evaluate(
+    group: liveGroup,
+    sourceId: "source",
+    snapshots: [exactSnapshot]
+  )
+  #expect(exactCoverage.windowId == 1)
+  #expect(exactCoverage.groupId == liveGroup.id)
   #expect(
     SnapshotCoverageEvaluator.evaluate(
       group: liveGroup,
@@ -315,6 +322,97 @@ func liveStateAndSnapshotRemainIndependent() throws {
     #expect(savedSnapshot.id == snapshot.id)
     #expect(savedSnapshot.tabCount == firstState.tabCount)
     #expect(savedSnapshot.tabCount != replacement.tabCount)
+  }
+}
+
+@Test
+func legacySnapshotWithoutScopeDefaultsToFullState() throws {
+  let state = try #require(DemoData.liveStates(referenceDate: referenceDate).first)
+  let snapshot = SavedSnapshot(
+    id: "legacy-snapshot",
+    name: "旧版完整现场",
+    createdAt: referenceDate,
+    sourceId: state.source.id,
+    windows: state.windows
+  )
+  let encoded = try PagecaseJSON.makeEncoder().encode(snapshot)
+  var object = try #require(
+    JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+  )
+  object.removeValue(forKey: "scope")
+  let legacyData = try JSONSerialization.data(withJSONObject: object)
+
+  let decoded = try PagecaseJSON.makeDecoder().decode(
+    SavedSnapshot.self,
+    from: legacyData
+  )
+
+  #expect(decoded.scope == .fullState)
+  #expect(decoded.windows == snapshot.windows)
+}
+
+@Test
+func groupSnapshotPersistsOnlyTheSelectedGroup() throws {
+  try withTemporaryPaths { paths in
+    let repository = try SnapshotRepository(paths: paths)
+    let state = try #require(DemoData.liveStates(referenceDate: referenceDate).first)
+    let window = try #require(state.windows.first)
+    let group = try #require(window.groups.first)
+
+    let snapshot = try repository.createGroupSnapshot(
+      from: group,
+      in: window,
+      sourceId: state.source.id,
+      name: "  开发资料  ",
+      now: referenceDate
+    )
+    let persisted = try #require(repository.loadSnapshots().first)
+
+    #expect(snapshot.name == "开发资料")
+    #expect(snapshot.scope == .group)
+    #expect(snapshot.windows.count == 1)
+    #expect(snapshot.windows[0].groups == [group])
+    #expect(snapshot.windows[0].ungroupedTabs.isEmpty)
+    #expect(persisted == snapshot)
+
+    let coverage = SnapshotCoverageEvaluator.evaluate(
+      group: group,
+      sourceId: state.source.id,
+      snapshots: [persisted]
+    )
+    #expect(coverage.isComplete)
+    #expect(coverage.windowId == window.id)
+    #expect(coverage.groupId == group.id)
+
+    let fullStateCoverage = SnapshotCoverageEvaluator.evaluate(
+      liveState: state,
+      snapshots: [persisted]
+    )
+    #expect(fullStateCoverage.snapshot == nil)
+    #expect(fullStateCoverage.uncoveredPageCount == state.tabCount)
+
+    let exportURL = paths.root.appendingPathComponent("group-library.json")
+    try repository.exportLibrary(to: exportURL, applicationVersion: "test")
+    let imported = try repository.importLibrary(from: exportURL)
+    #expect(imported.first?.id != snapshot.id)
+    #expect(imported.first?.scope == .group)
+    #expect(try repository.loadSnapshots().count == 2)
+  }
+}
+
+@Test
+func groupSnapshotRejectsMoreThanOneGroup() throws {
+  let state = try #require(DemoData.liveStates(referenceDate: referenceDate).first)
+  let invalid = SavedSnapshot(
+    id: "invalid-group-snapshot",
+    name: "不合法的标签组快照",
+    sourceId: state.source.id,
+    scope: .group,
+    windows: state.windows
+  )
+
+  #expect(throws: StoreError.self) {
+    try PagecaseValidator.validate(invalid)
   }
 }
 

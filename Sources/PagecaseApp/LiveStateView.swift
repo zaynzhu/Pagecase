@@ -1,10 +1,23 @@
 import PagecaseCore
 import SwiftUI
 
+private struct GroupSaveTarget: Identifiable {
+  let sourceId: String
+  let windowId: Int
+  let groupId: Int
+  let groupTitle: String
+  let pageCount: Int
+
+  var id: String {
+    "\(sourceId)-\(windowId)-\(groupId)"
+  }
+}
+
 struct LiveStateView: View {
   @ObservedObject var model: AppModel
   @Environment(\.colorScheme) private var colorScheme
   @State private var showingSaveSheet = false
+  @State private var groupSaveTarget: GroupSaveTarget?
 
   var body: some View {
     Group {
@@ -42,9 +55,17 @@ struct LiveStateView: View {
                     snapshots: model.snapshots
                   )
                 },
-                groupActionTitle: nil,
-                groupActionEnabled: false,
-                groupAction: nil
+                groupActionTitle: { group in
+                  groupActionTitle(for: group, sourceId: state.source.id)
+                },
+                groupActionEnabled: { _ in true },
+                groupAction: { group in
+                  handleGroupAction(
+                    group,
+                    windowId: window.id,
+                    sourceId: state.source.id
+                  )
+                }
               )
             }
           }
@@ -61,6 +82,20 @@ struct LiveStateView: View {
             confirmTitle: "保存快照"
           ) { name in
             model.createSnapshot(name: name)
+          }
+        }
+        .sheet(item: $groupSaveTarget) { target in
+          SnapshotNameSheet(
+            title: "保存「\(target.groupTitle)」",
+            initialName: defaultGroupSnapshotName(target),
+            confirmTitle: "保存该组"
+          ) { name in
+            model.createGroupSnapshot(
+              sourceId: target.sourceId,
+              windowId: target.windowId,
+              groupId: target.groupId,
+              name: name
+            )
           }
         }
       } else {
@@ -123,9 +158,9 @@ struct LiveStateView: View {
       return "当前所有 \(coverage.livePageCount) 个网页已包含在「\(snapshot.name)」"
     }
     if let snapshot = coverage.snapshot {
-      return "还有 \(coverage.uncoveredPageCount) 个网页未包含在「\(snapshot.name)」"
+      return "完整现场还有 \(coverage.uncoveredPageCount) 个网页未包含在「\(snapshot.name)」"
     }
-    return "尚未为当前 \(coverage.livePageCount) 个网页保存快照"
+    return "尚未保存完整现场，可按下方标签组状态逐组确认"
   }
 
   private func snapshotCoverageSymbol(_ coverage: SnapshotCoverage) -> String {
@@ -155,6 +190,49 @@ struct LiveStateView: View {
     formatter.dateFormat = "M 月 d 日现场"
     return "\(formatter.string(from: Date())) · \(state.tabCount) 个网页"
   }
+
+  private func defaultGroupSnapshotName(_ target: GroupSaveTarget) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "zh_CN")
+    formatter.dateFormat = "M 月 d 日"
+    return "\(target.groupTitle) · \(formatter.string(from: Date())) · \(target.pageCount) 个网页"
+  }
+
+  private func groupActionTitle(for group: TabGroup, sourceId: String) -> String {
+    let coverage = SnapshotCoverageEvaluator.evaluate(
+      group: group,
+      sourceId: sourceId,
+      snapshots: model.snapshots
+    )
+    if coverage.isComplete {
+      return "查看快照"
+    }
+    return coverage.snapshot == nil ? "保存该组" : "保存最新版本"
+  }
+
+  private func handleGroupAction(
+    _ group: TabGroup,
+    windowId: Int,
+    sourceId: String
+  ) {
+    let coverage = SnapshotCoverageEvaluator.evaluate(
+      group: group,
+      sourceId: sourceId,
+      snapshots: model.snapshots
+    )
+    if coverage.isComplete {
+      model.showSavedGroup(coverage)
+      return
+    }
+
+    groupSaveTarget = GroupSaveTarget(
+      sourceId: sourceId,
+      windowId: windowId,
+      groupId: group.id,
+      groupTitle: group.displayTitle,
+      pageCount: group.tabs.count
+    )
+  }
 }
 
 struct WindowSection: View {
@@ -165,8 +243,8 @@ struct WindowSection: View {
   let isGroupExpanded: (Int?) -> Bool
   let toggleGroupExpansion: (Int?) -> Void
   let groupCoverage: (TabGroup) -> GroupSnapshotCoverage?
-  let groupActionTitle: String?
-  let groupActionEnabled: Bool
+  let groupActionTitle: (TabGroup) -> String?
+  let groupActionEnabled: (TabGroup) -> Bool
   let groupAction: ((TabGroup) -> Void)?
 
   @Environment(\.colorScheme) private var colorScheme
@@ -210,12 +288,13 @@ struct WindowSection: View {
             actionTitle: actionTitle,
             actionEnabled: actionEnabled,
             action: action,
-            groupActionTitle: groupActionTitle,
-            groupActionEnabled: groupActionEnabled,
+            groupActionTitle: groupActionTitle(group),
+            groupActionEnabled: groupActionEnabled(group),
             groupAction: groupAction.map { action in
               { action(group) }
             }
           )
+          .id("snapshot-group-\(window.id)-\(group.id)")
         }
 
         if !window.ungroupedTabs.isEmpty {

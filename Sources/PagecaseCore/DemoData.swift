@@ -22,7 +22,25 @@ public enum DemoData {
 
   public static func snapshots(referenceDate: Date = Date()) -> [SavedSnapshot] {
     let states = liveStates(referenceDate: referenceDate)
+    let groupWindow = states[0].windows[0]
+    let savedGroup = groupWindow.groups[0]
     return [
+      SavedSnapshot(
+        id: "demo-snapshot-development-group",
+        name: "开发 · 最近保存",
+        createdAt: referenceDate.addingTimeInterval(-3_600),
+        sourceId: states[0].source.id,
+        scope: .group,
+        windows: [
+          BrowserWindow(
+            id: groupWindow.id,
+            order: groupWindow.order,
+            focused: groupWindow.focused,
+            groups: [savedGroup],
+            ungroupedTabs: []
+          )
+        ]
+      ),
       SavedSnapshot(
         id: "demo-snapshot-july",
         name: "七月的工具研究",

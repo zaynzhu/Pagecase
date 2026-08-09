@@ -18,7 +18,7 @@ Let pages leave memory, not your reach.
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.2.1-2F3437?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.3.0-2F3437?style=flat-square)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-787774?style=flat-square&logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-6-D97757?style=flat-square&logo=swift&logoColor=white)
 
@@ -34,7 +34,7 @@ Let pages leave memory, not your reach.
 ## ✨ Features
 
 - **Live Chrome mirror** — Shows regular windows, native tab groups, ungrouped pages, and their original order without reading page content.
-- **Immutable snapshots** — Saved snapshots are not overwritten by later Chrome changes, and their persisted contents are verified from disk.
+- **Full-state or group snapshots** — Save the complete Chrome state or one tab group; neither is overwritten by later Chrome changes.
 - **Safe-to-close status** — Shows snapshot coverage for the complete live state and each tab group, including the number of newly unsaved pages.
 - **Fast retrieval** — Searches titles, domains, full URLs, tab groups, and snapshot names with `⌘K` and complete keyboard navigation.
 - **Restore on demand** — Focuses a page still open in Chrome, opens one page from a snapshot, or restores a complete tab group in order.
@@ -48,7 +48,7 @@ Let pages leave memory, not your reach.
 
 Pagecase solves the fear of losing pages after closing them. It does not clean up Chrome automatically:
 
-1. In “Live,” confirm that the current state or target tab group has been saved.
+1. In “Live,” save the complete state or just the tab group you plan to close.
 2. Return to Chrome and close inactive pages or groups yourself to release memory.
 3. Later, search for one page or restore a complete tab group from a snapshot.
 
@@ -93,6 +93,18 @@ Pagecase does not open the extension management page or install the extension au
 ### Save the current state
 
 Open “Live,” select a Chrome source, and choose “保存当前现场” (Save Current State). The snapshot copies the complete window and group structure, then reports the saved page count, group count, and coverage status after persistence succeeds.
+
+### Save one tab group
+
+Each tab group shows its own saved state:
+
+- “保存该组” (Save This Group) copies only that group, not other windows or pages.
+- After a page is added, the group shows the unsaved count and offers “保存最新版本” (Save Latest Version). Earlier versions remain unchanged.
+- A fully saved group offers “查看快照” (View Snapshot), which opens the exact saved version and group.
+
+A group snapshot preserves the group name, color, page order, and duplicate URLs. Complete-state coverage is evaluated only against full-state snapshots, so one saved group is never presented as proof that all of Chrome has been saved.
+
+![Tab group save states](artifacts/qa-group-save-states.png)
 
 ### Search for and retrieve one page
 
@@ -189,7 +201,7 @@ npm run test:bridge
 ./scripts/build-app.sh
 ```
 
-Pagecase 0.2.1 has passed 45 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, the dangerous-extension-API scan, Release builds, visual acceptance, and the 500-page performance run.
+Pagecase 0.3.0 has passed 53 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, the dangerous-extension-API scan, Release builds, visual acceptance, and the 500-page performance run.
 
 > [!NOTE]
 > A Command Line Tools-only environment cannot enumerate Swift Testing tests correctly. `swift test` still compiles the test package, while `PagecaseCoreChecks` executes the same critical behavior checks.

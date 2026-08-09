@@ -50,9 +50,20 @@ enum SourceAvailability: Equatable {
   case missing
 }
 
+struct SnapshotGroupFocusRequest: Equatable {
+  let id = UUID()
+  let snapshotId: String
+  let windowId: Int
+  let groupId: Int
+
+  var anchorId: String {
+    "snapshot-group-\(windowId)-\(groupId)"
+  }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
-  static let applicationVersion = "0.2.1"
+  static let applicationVersion = "0.3.0"
 
   @Published var selection: NavigationItem = .live
   @Published var liveStates: [LiveState] = []
@@ -66,6 +77,7 @@ final class AppModel: ObservableObject {
   @Published var nativeHostStatus: NativeHostStatus
   @Published private(set) var sourceAvailabilityById: [String: SourceAvailability] = [:]
   @Published private(set) var collapsedGroupKeys: Set<String> = []
+  @Published private(set) var snapshotGroupFocusRequest: SnapshotGroupFocusRequest?
   @Published var notice: AppNotice?
 
   let paths: AppPaths
@@ -397,6 +409,68 @@ final class AppModel: ObservableObject {
       notice = AppNotice(kind: .error, message: error.localizedDescription)
       return false
     }
+  }
+
+  func createGroupSnapshot(
+    sourceId: String,
+    windowId: Int,
+    groupId: Int,
+    name: String
+  ) -> Bool {
+    guard let state = liveStates.first(where: { $0.source.id == sourceId }),
+          let window = state.windows.first(where: { $0.id == windowId }),
+          let group = window.groups.first(where: { $0.id == groupId }),
+          let snapshotRepository else {
+      notice = AppNotice(kind: .warning, message: "这个标签组已经不在当前 Chrome 现场中")
+      return false
+    }
+
+    do {
+      let snapshot = try snapshotRepository.createGroupSnapshot(
+        from: group,
+        in: window,
+        sourceId: sourceId,
+        name: name
+      )
+      selectedSnapshotId = snapshot.id
+      refresh(force: true)
+      notice = AppNotice(
+        kind: .success,
+        message: "已从磁盘核对保存「\(group.displayTitle)」的 \(snapshot.tabCount) 个网页，Chrome 保持不变"
+      )
+      return true
+    } catch {
+      notice = AppNotice(kind: .error, message: error.localizedDescription)
+      return false
+    }
+  }
+
+  func showSavedGroup(_ coverage: GroupSnapshotCoverage) {
+    guard coverage.isComplete,
+          let snapshot = coverage.snapshot,
+          let windowId = coverage.windowId,
+          let groupId = coverage.groupId else {
+      notice = AppNotice(kind: .warning, message: "暂时找不到这个标签组对应的快照")
+      return
+    }
+
+    let scope = "snapshot:\(snapshot.id)"
+    if !isGroupExpanded(scope: scope, windowId: windowId, groupId: groupId) {
+      toggleGroupExpansion(scope: scope, windowId: windowId, groupId: groupId)
+    }
+    selectedSnapshotId = snapshot.id
+    selection = .snapshots
+    searchQuery = ""
+    snapshotGroupFocusRequest = SnapshotGroupFocusRequest(
+      snapshotId: snapshot.id,
+      windowId: windowId,
+      groupId: groupId
+    )
+  }
+
+  func consumeSnapshotGroupFocusRequest() -> SnapshotGroupFocusRequest? {
+    defer { snapshotGroupFocusRequest = nil }
+    return snapshotGroupFocusRequest
   }
 
   func renameSnapshot(_ snapshot: SavedSnapshot, name: String) -> Bool {

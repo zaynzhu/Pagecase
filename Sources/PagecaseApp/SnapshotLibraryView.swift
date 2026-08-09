@@ -114,6 +114,7 @@ struct SnapshotLibraryView: View {
                   .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack {
+                  Text(snapshotScopeTitle(snapshot))
                   Text(snapshot.createdAt.formatted(date: .abbreviated, time: .omitted))
                   Spacer()
                   Text("\(snapshot.tabCount) 页")
@@ -142,89 +143,97 @@ struct SnapshotLibraryView: View {
   @ViewBuilder
   private var detail: some View {
     if let snapshot = model.selectedSnapshot {
-      ScrollView {
-        LazyVStack(alignment: .leading, spacing: 22) {
-          HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 7) {
-              Text(snapshot.name)
-                .font(.system(size: 29, weight: .semibold, design: .serif))
+      ScrollViewReader { proxy in
+        ScrollView {
+          LazyVStack(alignment: .leading, spacing: 22) {
+            HStack(alignment: .top) {
+              VStack(alignment: .leading, spacing: 7) {
+                Text(snapshot.name)
+                  .font(.system(size: 29, weight: .semibold, design: .serif))
 
-              Text("\(snapshot.createdAt.formatted(date: .long, time: .shortened)) · \(snapshot.groupCount) 个标签组 · \(snapshot.tabCount) 个网页")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(Palette.muted(colorScheme))
-            }
+                Text("\(snapshotScopeDetailTitle(snapshot)) · \(snapshot.createdAt.formatted(date: .long, time: .shortened)) · \(snapshot.groupCount) 个标签组 · \(snapshot.tabCount) 个网页")
+                  .font(.system(size: 11, design: .monospaced))
+                  .foregroundStyle(Palette.muted(colorScheme))
+              }
 
-            Spacer()
+              Spacer()
 
-            HStack(spacing: 8) {
-              Menu {
-                Button("重命名") {
-                  renameTarget = snapshot
+              HStack(spacing: 8) {
+                Menu {
+                  Button("重命名") {
+                    renameTarget = snapshot
+                  }
+                } label: {
+                  Image(systemName: "ellipsis")
+                    .frame(width: 28, height: 28)
                 }
-              } label: {
-                Image(systemName: "ellipsis")
-                  .frame(width: 28, height: 28)
-              }
-              .menuStyle(.borderlessButton)
-              .fixedSize()
-              .help("更多快照操作")
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("更多快照操作")
 
-              Button(role: .destructive) {
-                deleteTarget = snapshot
-              } label: {
-                Label("删除快照", systemImage: "trash")
-                  .font(.system(size: 11, weight: .medium))
+                Button(role: .destructive) {
+                  deleteTarget = snapshot
+                } label: {
+                  Label("删除快照", systemImage: "trash")
+                    .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("从本机删除这份快照")
+                .accessibilityHint("删除前会再次确认，不会影响 Chrome")
               }
-              .buttonStyle(.bordered)
-              .controlSize(.small)
-              .help("从本机删除这份快照")
-              .accessibilityHint("删除前会再次确认，不会影响 Chrome")
+            }
+
+            ForEach(snapshot.windows) { window in
+              WindowSection(
+                window: window,
+                action: { page in
+                  model.open(page: page, sourceId: snapshot.sourceId)
+                },
+                actionTitle: model.snapshotActionTitle(for: snapshot.sourceId),
+                actionEnabled: model.isSourceActionAvailable(snapshot.sourceId),
+                isGroupExpanded: { groupId in
+                  model.isGroupExpanded(
+                    scope: "snapshot:\(snapshot.id)",
+                    windowId: window.id,
+                    groupId: groupId
+                  )
+                },
+                toggleGroupExpansion: { groupId in
+                  model.toggleGroupExpansion(
+                    scope: "snapshot:\(snapshot.id)",
+                    windowId: window.id,
+                    groupId: groupId
+                  )
+                },
+                groupCoverage: { _ in nil },
+                groupActionTitle: { _ in
+                  model.snapshotGroupActionTitle(for: snapshot.sourceId)
+                },
+                groupActionEnabled: { _ in
+                  model.isSourceActionAvailable(snapshot.sourceId)
+                },
+                groupAction: { group in
+                  restoreTarget = GroupRestoreTarget(
+                    snapshotId: snapshot.id,
+                    sourceId: snapshot.sourceId,
+                    group: group
+                  )
+                }
+              )
             }
           }
-
-          ForEach(snapshot.windows) { window in
-            WindowSection(
-              window: window,
-              action: { page in
-                model.open(page: page, sourceId: snapshot.sourceId)
-              },
-              actionTitle: model.snapshotActionTitle(for: snapshot.sourceId),
-              actionEnabled: model.isSourceActionAvailable(snapshot.sourceId),
-              isGroupExpanded: { groupId in
-                model.isGroupExpanded(
-                  scope: "snapshot:\(snapshot.id)",
-                  windowId: window.id,
-                  groupId: groupId
-                )
-              },
-              toggleGroupExpansion: { groupId in
-                model.toggleGroupExpansion(
-                  scope: "snapshot:\(snapshot.id)",
-                  windowId: window.id,
-                  groupId: groupId
-                )
-              },
-              groupCoverage: { _ in nil },
-              groupActionTitle: model.snapshotGroupActionTitle(
-                for: snapshot.sourceId
-              ),
-              groupActionEnabled: model.isSourceActionAvailable(
-                snapshot.sourceId
-              ),
-              groupAction: { group in
-                restoreTarget = GroupRestoreTarget(
-                  snapshotId: snapshot.id,
-                  sourceId: snapshot.sourceId,
-                  group: group
-                )
-              }
-            )
-          }
+          .padding(.horizontal, 28)
+          .padding(.vertical, 26)
+          .frame(maxWidth: 920, alignment: .leading)
+          .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 26)
-        .frame(maxWidth: 920, alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .onAppear {
+          focusRequestedGroup(using: proxy)
+        }
+        .onChange(of: model.snapshotGroupFocusRequest) { _, _ in
+          focusRequestedGroup(using: proxy)
+        }
       }
     } else {
       EmptyStateView(symbol: "archivebox", title: "选择一个快照", message: "")
@@ -250,5 +259,23 @@ struct SnapshotLibraryView: View {
       return "只删除本地快照，不会影响 Chrome。"
     }
     return "将从本机永久删除这份包含 \(deleteTarget.tabCount) 个网页的快照。此操作无法撤销，但不会影响 Chrome。"
+  }
+
+  private func snapshotScopeTitle(_ snapshot: SavedSnapshot) -> String {
+    snapshot.scope == .group ? "标签组" : "完整现场"
+  }
+
+  private func snapshotScopeDetailTitle(_ snapshot: SavedSnapshot) -> String {
+    snapshot.scope == .group ? "标签组快照" : "完整现场快照"
+  }
+
+  private func focusRequestedGroup(using proxy: ScrollViewProxy) {
+    guard let request = model.consumeSnapshotGroupFocusRequest(),
+          request.snapshotId == model.selectedSnapshot?.id else {
+      return
+    }
+    DispatchQueue.main.async {
+      proxy.scrollTo(request.anchorId, anchor: .center)
+    }
   }
 }

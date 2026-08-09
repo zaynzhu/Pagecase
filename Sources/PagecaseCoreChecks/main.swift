@@ -69,7 +69,9 @@ func runChecks() throws -> Int {
   passed += try check(duplicateCount == 3, "重复网址被意外合并")
 
   let snapshots = DemoData.snapshots(referenceDate: referenceDate)
-  guard let exactSnapshot = snapshots.first(where: { $0.sourceId == firstState.source.id }),
+  guard let exactSnapshot = snapshots.first(where: {
+    $0.sourceId == firstState.source.id && $0.scope == .fullState
+  }),
         let firstWindow = firstState.windows.first else {
     throw CheckFailure.failed("演示数据缺少覆盖检查夹具")
   }
@@ -200,6 +202,74 @@ func runChecks() throws -> Int {
     Set(duplicateResults.map(\.id)).count == duplicateResults.count,
     "搜索结果标识发生冲突"
   )
+
+  let legacyEncoded = try PagecaseJSON.makeEncoder().encode(exactSnapshot)
+  guard var legacyObject = try JSONSerialization.jsonObject(with: legacyEncoded)
+    as? [String: Any] else {
+    throw CheckFailure.failed("旧快照兼容夹具生成失败")
+  }
+  legacyObject.removeValue(forKey: "scope")
+  let legacyData = try JSONSerialization.data(withJSONObject: legacyObject)
+  let legacySnapshot = try PagecaseJSON.makeDecoder().decode(
+    SavedSnapshot.self,
+    from: legacyData
+  )
+  passed += try check(
+    legacySnapshot.scope == .fullState,
+    "旧快照未默认识别为完整现场"
+  )
+
+  passed += try withTemporaryPaths { paths in
+    var localPassed = 0
+    let repository = try SnapshotRepository(paths: paths)
+    let groupSnapshot = try repository.createGroupSnapshot(
+      from: firstGroup,
+      in: firstWindow,
+      sourceId: firstState.source.id,
+      name: "  开发资料  ",
+      now: referenceDate
+    )
+    let persisted = try repository.loadSnapshots().first
+    localPassed += try check(groupSnapshot.scope == .group, "标签组快照类型错误")
+    localPassed += try check(groupSnapshot.name == "开发资料", "标签组快照名称未清理")
+    localPassed += try check(
+      groupSnapshot.windows.count == 1
+        && groupSnapshot.windows[0].groups == [firstGroup]
+        && groupSnapshot.windows[0].ungroupedTabs.isEmpty,
+      "标签组快照包含了选中组以外的内容"
+    )
+    localPassed += try check(persisted == groupSnapshot, "标签组快照落盘核对失败")
+    let coverage = SnapshotCoverageEvaluator.evaluate(
+      group: firstGroup,
+      sourceId: firstState.source.id,
+      snapshots: [groupSnapshot]
+    )
+    localPassed += try check(
+      coverage.isComplete
+        && coverage.windowId == firstWindow.id
+        && coverage.groupId == firstGroup.id,
+      "标签组快照无法定位对应保存内容"
+    )
+    let fullStateCoverage = SnapshotCoverageEvaluator.evaluate(
+      liveState: firstState,
+      snapshots: [groupSnapshot]
+    )
+    localPassed += try check(
+      fullStateCoverage.snapshot == nil
+        && fullStateCoverage.uncoveredPageCount == firstState.tabCount,
+      "标签组快照被误认为完整现场快照"
+    )
+    let exportURL = paths.root.appendingPathComponent("group-library.json")
+    try repository.exportLibrary(to: exportURL, applicationVersion: "check")
+    let imported = try repository.importLibrary(from: exportURL)
+    localPassed += try check(
+      imported.first?.id != groupSnapshot.id
+        && imported.first?.scope == .group
+        && repository.loadSnapshots().count == 2,
+      "标签组快照导入冲突后没有保留范围"
+    )
+    return localPassed
+  }
 
   passed += try withTemporaryPaths { paths in
     var localPassed = 0

@@ -42,6 +42,37 @@ public struct SnapshotRepository: Sendable {
     return snapshot
   }
 
+  @discardableResult
+  public func createGroupSnapshot(
+    from group: TabGroup,
+    in window: BrowserWindow,
+    sourceId: String,
+    name: String,
+    now: Date = Date()
+  ) throws -> SavedSnapshot {
+    let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedName.isEmpty else {
+      throw StoreError.invalidFile("快照名称不能为空")
+    }
+
+    let snapshotWindow = BrowserWindow(
+      id: window.id,
+      order: window.order,
+      focused: window.focused,
+      groups: [group],
+      ungroupedTabs: []
+    )
+    let snapshot = SavedSnapshot(
+      name: trimmedName,
+      createdAt: now,
+      sourceId: sourceId,
+      scope: .group,
+      windows: [snapshotWindow]
+    )
+    try saveSnapshot(snapshot)
+    return snapshot
+  }
+
   public func saveSnapshot(_ snapshot: SavedSnapshot) throws {
     try PagecaseValidator.validate(snapshot)
     let file = paths.snapshotFile(snapshotId: snapshot.id)
@@ -111,6 +142,7 @@ public struct SnapshotRepository: Sendable {
           createdAt: snapshot.createdAt,
           updatedAt: now,
           sourceId: snapshot.sourceId,
+          scope: snapshot.scope,
           windows: snapshot.windows
         )
       } else {

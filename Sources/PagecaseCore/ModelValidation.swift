@@ -21,6 +21,13 @@ public enum PagecaseValidator {
     guard !snapshot.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
       throw StoreError.invalidFile("快照名称不能为空")
     }
+    if snapshot.scope == .group {
+      guard snapshot.windows.count == 1,
+            snapshot.windows[0].groups.count == 1,
+            snapshot.windows[0].ungroupedTabs.isEmpty else {
+        throw StoreError.invalidFile("标签组快照必须只包含一个标签组")
+      }
+    }
     try validate(windows: snapshot.windows)
   }
 

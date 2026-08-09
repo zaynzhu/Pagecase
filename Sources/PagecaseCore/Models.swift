@@ -156,6 +156,11 @@ public struct LiveState: Codable, Equatable, Sendable {
   }
 }
 
+public enum SnapshotScope: String, Codable, Equatable, Sendable {
+  case fullState
+  case group
+}
+
 public struct SavedSnapshot: Codable, Equatable, Identifiable, Sendable {
   public let schemaVersion: Int
   public let id: String
@@ -163,6 +168,7 @@ public struct SavedSnapshot: Codable, Equatable, Identifiable, Sendable {
   public let createdAt: Date
   public var updatedAt: Date
   public let sourceId: String
+  public let scope: SnapshotScope
   public let windows: [BrowserWindow]
 
   public init(
@@ -172,6 +178,7 @@ public struct SavedSnapshot: Codable, Equatable, Identifiable, Sendable {
     createdAt: Date = Date(),
     updatedAt: Date? = nil,
     sourceId: String,
+    scope: SnapshotScope = .fullState,
     windows: [BrowserWindow]
   ) {
     self.schemaVersion = schemaVersion
@@ -180,7 +187,43 @@ public struct SavedSnapshot: Codable, Equatable, Identifiable, Sendable {
     self.createdAt = createdAt
     self.updatedAt = updatedAt ?? createdAt
     self.sourceId = sourceId
+    self.scope = scope
     self.windows = windows
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case schemaVersion
+    case id
+    case name
+    case createdAt
+    case updatedAt
+    case sourceId
+    case scope
+    case windows
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+    id = try container.decode(String.self, forKey: .id)
+    name = try container.decode(String.self, forKey: .name)
+    createdAt = try container.decode(Date.self, forKey: .createdAt)
+    updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+    sourceId = try container.decode(String.self, forKey: .sourceId)
+    scope = try container.decodeIfPresent(SnapshotScope.self, forKey: .scope) ?? .fullState
+    windows = try container.decode([BrowserWindow].self, forKey: .windows)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(schemaVersion, forKey: .schemaVersion)
+    try container.encode(id, forKey: .id)
+    try container.encode(name, forKey: .name)
+    try container.encode(createdAt, forKey: .createdAt)
+    try container.encode(updatedAt, forKey: .updatedAt)
+    try container.encode(sourceId, forKey: .sourceId)
+    try container.encode(scope, forKey: .scope)
+    try container.encode(windows, forKey: .windows)
   }
 
   public var tabCount: Int {

@@ -18,7 +18,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.2.1-2F3437?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.3.0-2F3437?style=flat-square)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-787774?style=flat-square&logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-6-D97757?style=flat-square&logo=swift&logoColor=white)
 
@@ -34,7 +34,7 @@
 ## ✨ 核心能力
 
 - **实时镜像 Chrome** — 展示普通窗口、原生标签组、未分组网页和原有顺序，不读取网页正文。
-- **保存不可变快照** — 快照写入本机后不会被后续 Chrome 变化改写，并会从磁盘重新核对保存结果。
+- **按现场或分组保存** — 可以保存完整 Chrome 现场，也可以只保存一个标签组；两者写入后都不会被后续变化改写。
 - **判断是否放心关闭** — 实时显示完整现场和每个标签组的保存覆盖状态，新增网页会标出未保存数量。
 - **快速找回网页** — 搜索标题、域名、完整网址、标签组和快照名称，支持 `⌘K` 与完整键盘导航。
 - **按需恢复** — 定位仍在 Chrome 中的网页、从快照打开单页，或按原顺序恢复完整标签组。
@@ -48,7 +48,7 @@
 
 页匣解决的是“关闭后还能不能找回来”，不会替你自动清理 Chrome：
 
-1. 在“现在”页面确认当前现场或目标标签组已经保存。
+1. 在“现在”页面保存完整现场，或直接保存准备关闭的标签组。
 2. 回到 Chrome，由你自己关闭暂时不用的页面或标签组，释放内存。
 3. 以后通过搜索打开一个网页，或从快照恢复整个标签组。
 
@@ -93,6 +93,18 @@ open "dist/页匣.app"
 ### 保存当前现场
 
 进入“现在”，选择 Chrome 来源并点击“保存当前现场”。快照会完整复制当时的窗口和分组结构，保存成功后显示网页数、标签组数和覆盖状态。
+
+### 单独保存一个标签组
+
+每个标签组会显示自己的保存状态：
+
+- “保存该组”只复制当前标签组，不保存其他窗口或网页。
+- 组内新增网页后显示未保存数量，并提供“保存最新版本”。旧版本继续保留，不会被覆盖。
+- 已完整保存的标签组提供“查看快照”，直接打开对应版本和标签组。
+
+标签组快照保留组名、颜色、网页顺序和重复网址。完整现场状态只由完整现场快照判断，避免把一份标签组快照误认为整个 Chrome 已经保存。
+
+![单个标签组保存状态](artifacts/qa-group-save-states.png)
 
 ### 搜索并找回一个网页
 
@@ -189,7 +201,7 @@ npm run test:bridge
 ./scripts/build-app.sh
 ```
 
-当前 0.2.1 版本已通过 45 项 Swift 核心行为检查、10 项扩展测试、Bridge 协议往返、扩展危险 API 扫描、Release 构建、视觉验收和 500 页性能验收。
+当前 0.3.0 版本已通过 53 项 Swift 核心行为检查、10 项扩展测试、Bridge 协议往返、扩展危险 API 扫描、Release 构建、视觉验收和 500 页性能验收。
 
 > [!NOTE]
 > 仅安装 Command Line Tools 的环境无法正常枚举 Swift Testing 测试；`swift test` 仍负责编译测试包，`PagecaseCoreChecks` 会实际执行同一组关键行为检查。

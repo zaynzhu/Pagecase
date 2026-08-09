@@ -26,15 +26,21 @@ public struct SnapshotCoverage: Equatable, Sendable {
 
 public struct GroupSnapshotCoverage: Equatable, Sendable {
   public let snapshot: SavedSnapshot?
+  public let windowId: Int?
+  public let groupId: Int?
   public let pageCount: Int
   public let uncoveredPageCount: Int
 
   public init(
     snapshot: SavedSnapshot?,
+    windowId: Int? = nil,
+    groupId: Int? = nil,
     pageCount: Int,
     uncoveredPageCount: Int
   ) {
     self.snapshot = snapshot
+    self.windowId = windowId
+    self.groupId = groupId
     self.pageCount = pageCount
     self.uncoveredPageCount = uncoveredPageCount
   }
@@ -51,7 +57,9 @@ public enum SnapshotCoverageEvaluator {
   ) -> SnapshotCoverage {
     let liveKeys = backupKeys(in: liveState.windows)
     let candidates = snapshots
-      .filter { $0.sourceId == liveState.source.id }
+      .filter {
+        $0.sourceId == liveState.source.id && $0.scope == .fullState
+      }
       .map { snapshot in
         (
           snapshot: snapshot,
@@ -100,6 +108,8 @@ public enum SnapshotCoverageEvaluator {
             .map { candidateGroup in
               (
                 snapshot: snapshot,
+                windowId: window.id,
+                groupId: candidateGroup.id,
                 uncoveredPageCount: uncoveredItemCount(
                   liveItems: liveURLs,
                   savedItems: candidateGroup.tabs.map(\.url)
@@ -117,6 +127,8 @@ public enum SnapshotCoverageEvaluator {
     }) else {
       return GroupSnapshotCoverage(
         snapshot: nil,
+        windowId: nil,
+        groupId: nil,
         pageCount: liveURLs.count,
         uncoveredPageCount: liveURLs.count
       )
@@ -124,6 +136,8 @@ public enum SnapshotCoverageEvaluator {
 
     return GroupSnapshotCoverage(
       snapshot: best.snapshot,
+      windowId: best.windowId,
+      groupId: best.groupId,
       pageCount: liveURLs.count,
       uncoveredPageCount: best.uncoveredPageCount
     )
