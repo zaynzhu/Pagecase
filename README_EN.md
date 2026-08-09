@@ -57,7 +57,7 @@ For Chrome:
 2. Return to Chrome and close inactive pages or groups yourself to release memory.
 3. Later, search for one page or restore a complete tab group from a snapshot.
 
-Before restoring a group, Pagecase shows its name and the number of pages that will open. The connector groups only the tabs created by that restore command and never adds an existing tab to the new group.
+Before restoring a group, Pagecase shows the target Chrome source, pages in the snapshot, matching URLs already open, and the number of tabs that will be created. It also warns that memory can rise briefly during restoration. Duplicate URLs are never removed automatically; the connector groups only tabs created by that restore command and never adds an existing tab to the new group.
 
 For Safari:
 
@@ -160,7 +160,7 @@ Press `⌘K` and search by title, domain, URL, tab group, or snapshot name:
 - Switch between All, Chrome, and Safari above the results. The top-bar badge follows the active scope, and a browser-only result set never includes the other browser.
 - A live result uses Focus and only activates an already open tab.
 - A snapshot result uses Open and creates only one new tab.
-- A group result uses View and only navigates inside Pagecase. Snapshot groups expose a separate Restore Group action that confirms the page count before creating tabs.
+- A group result uses View and only navigates inside Pagecase. Snapshot groups expose a separate Restore Group action that opens a Chrome-only preview before creating tabs.
 - Return on a group performs View and never restores the group directly.
 - When a source is offline or stale, its actions are disabled while local snapshots remain searchable and readable.
 
@@ -168,9 +168,11 @@ Press `⌘K` and search by title, domain, URL, tab group, or snapshot name:
 
 ### Restore a group or delete a snapshot
 
-- Choose “恢复整组” (Restore Group) beside a snapshot group and confirm to create and group new tabs in their original order.
+- Choose “恢复整组” (Restore Group) beside a snapshot group, review its source, matching open URLs, new-tab count, and memory note, then create and group the new tabs in their original order.
 - Choose “删除快照” (Delete Snapshot) beside the snapshot title; the matching local file is removed only after confirming its name and page count.
 - Snapshot deletion cannot be undone, but it never closes or changes a page in Chrome.
+
+![Chrome tab-group restore preview](artifacts/qa-group-restore-preview.png)
 
 ---
 
@@ -188,7 +190,7 @@ Pagecase explicitly does not:
 - Restore complete windows or modify an existing tab group.
 - Monitor Safari in the background, read Safari's native tab-group name, execute page JavaScript, or read page content.
 
-Every action that changes visible Chrome state starts with a single user click, and group restoration additionally confirms the page count. See the [product specification](docs/PRODUCT.md) and [restore-group architecture decision](docs/adr/0002-restore-groups-with-new-tabs-only.md) for the complete boundary.
+Every action that changes visible Chrome state starts with a single user click, and group restoration additionally requires reviewing its source, counts, and duplicate-URL notice in a dedicated preview. See the [product specification](docs/PRODUCT.md) and [restore-group architecture decision](docs/adr/0002-restore-groups-with-new-tabs-only.md) for the complete boundary.
 
 ---
 
@@ -261,7 +263,7 @@ npm run check:safari
 ./scripts/build-app.sh
 ```
 
-Pagecase 0.6.0 has passed 89 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run.
+Pagecase 0.6.0 has passed 93 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run.
 
 > [!NOTE]
 > A Command Line Tools-only environment cannot enumerate Swift Testing tests correctly. `swift test` still compiles the test package, while `PagecaseCoreChecks` executes the same critical behavior checks.

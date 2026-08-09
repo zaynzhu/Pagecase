@@ -399,6 +399,20 @@ final class AppModel: ObservableObject {
     isSourceActionAvailable(sourceId) ? "恢复整组" : "Chrome 未连接"
   }
 
+  func groupRestorePreview(for group: TabGroup, sourceId: String) -> GroupRestorePreview {
+    GroupRestorePreviewBuilder.make(
+      group: group,
+      sourceId: sourceId,
+      liveStates: liveStates
+    )
+  }
+
+  func chromeSourceLabel(for sourceId: String) -> String {
+    liveStates.first(where: {
+      $0.source.id == sourceId && $0.source.kind == .chrome
+    })?.source.label ?? "Chrome"
+  }
+
   func isGroupExpanded(
     scope: String,
     windowId: Int,

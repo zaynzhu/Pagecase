@@ -68,6 +68,94 @@ func runChecks() throws -> Int {
     .count
   passed += try check(duplicateCount == 3, "重复网址被意外合并")
 
+  let restoreDuplicateURL = "https://example.com/restore-duplicate"
+  let restoreGroup = TabGroup(
+    id: 20,
+    title: "恢复预览",
+    color: .blue,
+    collapsed: false,
+    order: 0,
+    tabs: [
+      PageItem(
+        id: 1,
+        windowId: 10,
+        groupId: 20,
+        index: 0,
+        title: "重复一",
+        url: restoreDuplicateURL
+      ),
+      PageItem(
+        id: 2,
+        windowId: 10,
+        groupId: 20,
+        index: 1,
+        title: "重复二",
+        url: restoreDuplicateURL
+      ),
+      PageItem(
+        id: 3,
+        windowId: 10,
+        groupId: 20,
+        index: 2,
+        title: "只在快照",
+        url: "https://example.com/restore-snapshot-only"
+      )
+    ]
+  )
+  let restoreState = LiveState(
+    source: BrowserSource(
+      id: "restore-chrome",
+      label: "Chrome · 恢复测试",
+      capturedAt: referenceDate
+    ),
+    windows: [
+      BrowserWindow(
+        id: 30,
+        order: 0,
+        focused: true,
+        groups: [],
+        ungroupedTabs: [
+          PageItem(
+            id: 4,
+            windowId: 30,
+            groupId: nil,
+            index: 0,
+            title: "当前只有一个副本",
+            url: restoreDuplicateURL
+          )
+        ]
+      )
+    ]
+  )
+  let restorePreview = GroupRestorePreviewBuilder.make(
+    group: restoreGroup,
+    sourceId: restoreState.source.id,
+    liveStates: [restoreState]
+  )
+  passed += try check(restorePreview.pageCount == 3, "恢复预览遗漏快照网页")
+  passed += try check(
+    restorePreview.alreadyOpenPageCount == 1,
+    "恢复预览没有按重复网址数量匹配当前 Chrome"
+  )
+  let safariRestoreImpostor = LiveState(
+    source: BrowserSource(
+      id: restoreState.source.id,
+      kind: .safari,
+      label: "Safari",
+      capturedAt: referenceDate
+    ),
+    windows: restoreState.windows
+  )
+  passed += try check(
+    GroupRestorePreviewBuilder.make(
+      group: restoreGroup,
+      sourceId: restoreState.source.id,
+      liveStates: [safariRestoreImpostor]
+    ).alreadyOpenPageCount == 0,
+    "Safari 网页被错误计入 Chrome 恢复预览"
+  )
+  passed += try check(restoreGroup.tabs.count == 3, "恢复预览意外去重快照网页")
+
   let snapshots = DemoData.snapshots(referenceDate: referenceDate)
   let libraryItems = SnapshotLibraryOrganizer.organize(snapshots)
   let developmentSeries = SnapshotLibraryOrganizer.groupSeries(

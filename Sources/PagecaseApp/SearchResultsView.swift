@@ -82,25 +82,10 @@ struct SearchResultsView: View {
         revealSelection(selectedId, proxy: proxy)
       }
     }
-    .confirmationDialog(
-      restoreDialogTitle,
-      isPresented: Binding(
-        get: { restoreTarget != nil },
-        set: { if !$0 { restoreTarget = nil } }
-      ),
-      titleVisibility: .visible
-    ) {
-      if let restoreTarget {
-        Button("打开 \(restoreTarget.group.tabs.count) 个网页") {
-          model.restore(group: restoreTarget.group, sourceId: restoreTarget.sourceId)
-          self.restoreTarget = nil
-        }
+    .sheet(item: $restoreTarget) { target in
+      GroupRestorePreviewSheet(target: target) {
+        model.restore(group: target.group, sourceId: target.sourceId)
       }
-      Button("取消", role: .cancel) {
-        restoreTarget = nil
-      }
-    } message: {
-      Text("将在 Chrome 中按原顺序新建并组合这些网页，不会关闭、移动或改变任何已有标签。")
     }
   }
 
@@ -285,15 +270,10 @@ struct SearchResultsView: View {
     restoreTarget = GroupRestoreTarget(
       snapshotId: snapshotId,
       sourceId: result.sourceId,
-      group: group
+      sourceLabel: model.chromeSourceLabel(for: result.sourceId),
+      group: group,
+      preview: model.groupRestorePreview(for: group, sourceId: result.sourceId)
     )
-  }
-
-  private var restoreDialogTitle: String {
-    guard let restoreTarget else {
-      return "恢复标签组？"
-    }
-    return "恢复「\(restoreTarget.group.displayTitle)」？"
   }
 
   private var visibleResults: ArraySlice<SearchResult> {

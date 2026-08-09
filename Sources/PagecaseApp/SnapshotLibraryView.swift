@@ -59,28 +59,10 @@ struct SnapshotLibraryView: View {
     } message: {
       Text(deleteDialogMessage)
     }
-    .confirmationDialog(
-      restoreDialogTitle,
-      isPresented: Binding(
-        get: { restoreTarget != nil },
-        set: { if !$0 { restoreTarget = nil } }
-      ),
-      titleVisibility: .visible
-    ) {
-      if let restoreTarget {
-        Button("打开 \(restoreTarget.group.tabs.count) 个网页") {
-          model.restore(
-            group: restoreTarget.group,
-            sourceId: restoreTarget.sourceId
-          )
-          self.restoreTarget = nil
-        }
+    .sheet(item: $restoreTarget) { target in
+      GroupRestorePreviewSheet(target: target) {
+        model.restore(group: target.group, sourceId: target.sourceId)
       }
-      Button("取消", role: .cancel) {
-        restoreTarget = nil
-      }
-    } message: {
-      Text("将在 Chrome 中按原顺序新建并组合这些网页，不会关闭、移动或改变任何已有标签。")
     }
     .confirmationDialog(
       openCollectionDialogTitle,
@@ -409,7 +391,12 @@ struct SnapshotLibraryView: View {
                   restoreTarget = GroupRestoreTarget(
                     snapshotId: snapshot.id,
                     sourceId: snapshot.sourceId,
-                    group: group
+                    sourceLabel: model.chromeSourceLabel(for: snapshot.sourceId),
+                    group: group,
+                    preview: model.groupRestorePreview(
+                      for: group,
+                      sourceId: snapshot.sourceId
+                    )
                   )
                 },
                 ungroupedTitle: snapshot.sourceKind == .safari ? "合集网页" : "未分组"
@@ -435,13 +422,6 @@ struct SnapshotLibraryView: View {
         message: ""
       )
     }
-  }
-
-  private var restoreDialogTitle: String {
-    guard let restoreTarget else {
-      return "恢复标签组？"
-    }
-    return "恢复「\(restoreTarget.group.displayTitle)」？"
   }
 
   private var deleteDialogTitle: String {

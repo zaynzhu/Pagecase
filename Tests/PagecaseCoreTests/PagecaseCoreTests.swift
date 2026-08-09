@@ -36,6 +36,135 @@ func demoDataKeepsWindowsGroupsAndDuplicateURLs() throws {
 }
 
 @Test
+func groupRestorePreviewCountsAlreadyOpenURLsWithMultiplicity() {
+  let duplicateURL = "https://example.com/duplicate"
+  let group = TabGroup(
+    id: 20,
+    title: "重复网址语境",
+    color: .blue,
+    collapsed: false,
+    order: 0,
+    tabs: [
+      PageItem(
+        id: 1,
+        windowId: 10,
+        groupId: 20,
+        index: 0,
+        title: "重复一",
+        url: duplicateURL
+      ),
+      PageItem(
+        id: 2,
+        windowId: 10,
+        groupId: 20,
+        index: 1,
+        title: "重复二",
+        url: duplicateURL
+      ),
+      PageItem(
+        id: 3,
+        windowId: 10,
+        groupId: 20,
+        index: 2,
+        title: "只在快照",
+        url: "https://example.com/snapshot-only"
+      )
+    ]
+  )
+  let state = LiveState(
+    source: BrowserSource(
+      id: "chrome-source",
+      label: "Chrome · 测试",
+      capturedAt: referenceDate
+    ),
+    windows: [
+      BrowserWindow(
+        id: 30,
+        order: 0,
+        focused: true,
+        groups: [],
+        ungroupedTabs: [
+          PageItem(
+            id: 4,
+            windowId: 30,
+            groupId: nil,
+            index: 0,
+            title: "当前只有一个副本",
+            url: duplicateURL
+          )
+        ]
+      )
+    ]
+  )
+
+  let preview = GroupRestorePreviewBuilder.make(
+    group: group,
+    sourceId: state.source.id,
+    liveStates: [state]
+  )
+
+  #expect(preview.pageCount == 3)
+  #expect(preview.alreadyOpenPageCount == 1)
+  #expect(group.tabs.count == 3)
+}
+
+@Test
+func groupRestorePreviewNeverMixesSafariOrAnotherChromeSource() {
+  let group = TabGroup(
+    id: 40,
+    title: "浏览器边界",
+    color: .green,
+    collapsed: false,
+    order: 0,
+    tabs: [
+      PageItem(
+        id: 5,
+        windowId: 41,
+        groupId: 40,
+        index: 0,
+        title: "边界网页",
+        url: "https://example.com/browser-boundary"
+      )
+    ]
+  )
+  let matchingPage = group.tabs[0]
+  let safariState = LiveState(
+    source: BrowserSource(
+      id: "target-source",
+      kind: .safari,
+      label: "Safari",
+      capturedAt: referenceDate
+    ),
+    windows: [
+      BrowserWindow(
+        id: 42,
+        order: 0,
+        focused: true,
+        groups: [],
+        ungroupedTabs: [matchingPage]
+      )
+    ]
+  )
+  let otherChromeState = LiveState(
+    source: BrowserSource(
+      id: "other-source",
+      label: "Chrome · 其他",
+      capturedAt: referenceDate
+    ),
+    windows: safariState.windows
+  )
+
+  let preview = GroupRestorePreviewBuilder.make(
+    group: group,
+    sourceId: "target-source",
+    liveStates: [safariState, otherChromeState]
+  )
+
+  #expect(preview.pageCount == 1)
+  #expect(preview.alreadyOpenPageCount == 0)
+}
+
+@Test
 func snapshotLibraryCollectsGroupVersionsWithoutMergingSnapshots() throws {
   let snapshots = DemoData.snapshots(referenceDate: referenceDate)
   let items = SnapshotLibraryOrganizer.organize(snapshots)

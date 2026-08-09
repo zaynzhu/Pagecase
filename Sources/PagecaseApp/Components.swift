@@ -4,10 +4,12 @@ import SwiftUI
 struct GroupRestoreTarget: Identifiable {
   let snapshotId: String
   let sourceId: String
+  let sourceLabel: String
   let group: TabGroup
+  let preview: GroupRestorePreview
 
   var id: String {
-    "\(snapshotId)-\(group.id)"
+    "\(snapshotId)-\(sourceId)-\(group.id)"
   }
 }
 
