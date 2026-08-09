@@ -198,6 +198,13 @@ pagecase/
 
 `SnapshotRepository.exportLibrary` 接受可选 `browserKind`。未指定时导出完整资料库；指定 Chrome 或 Safari 时，在构建 `LibraryExport` 前按持久化的 `sourceKind` 过滤。过滤发生在领域层，界面不能通过隐藏行来伪造浏览器专属备份。
 
+导入分成两个明确阶段：
+
+1. `inspectLibraryImport` 完整解码并验证导出文件，在不写磁盘的前提下按 `sourceKind` 汇总 Chrome、Safari 数量和本地标识冲突。
+2. 用户在原生预览面板选择来源并确认后，`importLibrary(browserKinds:)` 才在领域层过滤记录，并复用暂存目录、读回校验与目录级替换完成原子写入。
+
+取消预览、空来源选择和无效文件都不能触发资料目录替换；标识冲突继续生成新标识，不覆盖原记录。
+
 ### 6.4 Safari 按需捕获
 
 `SystemSafariCapturer` 实现应用内的 `SafariCapturing` 协议：
@@ -378,6 +385,7 @@ Bridge 连接后持续运行：
 11. Safari 脚本只读取标题、网址、标签顺序和当前页，不包含关闭、移动、网页脚本执行或内容读取。
 12. Chrome 快照和 Safari 合集的来源字段必须与各自范围一致，不能互相参与覆盖判断、标签组版本序列或浏览器专属动作。
 13. Chrome 或 Safari 专属搜索与专属导出都必须在领域数据集合上过滤，输出中不能出现另一浏览器来源。
+14. 导入预览必须只读；浏览器选择必须在领域层过滤，取消、空选择和任一无效记录都不能产生部分写入。
 
 ## 12. 可演进边界
 

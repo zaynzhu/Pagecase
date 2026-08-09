@@ -180,6 +180,90 @@ func browserScopedExportKeepsChromeAndSafariInSeparateFiles() throws {
 }
 
 @Test
+func importPreviewReportsBrowserSectionsWithoutWriting() throws {
+  try withTemporaryPaths { sourcePaths in
+    let sourceRepository = try SnapshotRepository(paths: sourcePaths)
+    let exportedSnapshots = DemoData.snapshots(referenceDate: referenceDate)
+    for snapshot in exportedSnapshots {
+      try sourceRepository.saveSnapshot(snapshot)
+    }
+    let exportURL = sourcePaths.root.appendingPathComponent("mixed-library.json")
+    try sourceRepository.exportLibrary(to: exportURL, applicationVersion: "0.6.0")
+
+    try withTemporaryPaths { destinationPaths in
+      let repository = try SnapshotRepository(paths: destinationPaths)
+      let existingChrome = try #require(exportedSnapshots.first { $0.sourceKind == .chrome })
+      let existingSafari = try #require(exportedSnapshots.first { $0.sourceKind == .safari })
+      try repository.saveSnapshot(existingChrome)
+      try repository.saveSnapshot(existingSafari)
+      let beforePreview = try repository.loadSnapshots()
+
+      let preview = try repository.inspectLibraryImport(from: exportURL)
+      let chrome = try #require(preview.summary(for: .chrome))
+      let safari = try #require(preview.summary(for: .safari))
+
+      #expect(preview.applicationVersion == "0.6.0")
+      #expect(preview.snapshotCount == exportedSnapshots.count)
+      #expect(chrome.snapshotCount == 4 && chrome.idConflictCount == 1)
+      #expect(safari.snapshotCount == 1 && safari.idConflictCount == 1)
+      #expect(chrome.tabCount == exportedSnapshots.filter { $0.sourceKind == .chrome }.reduce(0) { $0 + $1.tabCount })
+      #expect(safari.tabCount == exportedSnapshots.filter { $0.sourceKind == .safari }.reduce(0) { $0 + $1.tabCount })
+      #expect(try repository.loadSnapshots() == beforePreview)
+    }
+  }
+}
+
+@Test
+func browserScopedImportOnlyWritesSelectedSources() throws {
+  try withTemporaryPaths { sourcePaths in
+    let sourceRepository = try SnapshotRepository(paths: sourcePaths)
+    for snapshot in DemoData.snapshots(referenceDate: referenceDate) {
+      try sourceRepository.saveSnapshot(snapshot)
+    }
+    let exportURL = sourcePaths.root.appendingPathComponent("mixed-library.json")
+    try sourceRepository.exportLibrary(to: exportURL, applicationVersion: "test")
+
+    try withTemporaryPaths { destinationPaths in
+      let repository = try SnapshotRepository(paths: destinationPaths)
+      let emptyImport = try repository.importLibrary(from: exportURL, browserKinds: [])
+      #expect(emptyImport.isEmpty)
+      #expect(try repository.loadSnapshots().isEmpty)
+
+      let safariImport = try repository.importLibrary(from: exportURL, browserKinds: [.safari])
+      #expect(safariImport.count == 1)
+      #expect(safariImport.allSatisfy { $0.sourceKind == .safari })
+
+      let chromeImport = try repository.importLibrary(from: exportURL, browserKinds: [.chrome])
+      #expect(chromeImport.count == 4)
+      #expect(chromeImport.allSatisfy { $0.sourceKind == .chrome })
+      #expect(try repository.loadSnapshots().count == 5)
+    }
+  }
+}
+
+@Test
+func emptyLibraryCannotOpenAnImportPreview() throws {
+  try withTemporaryPaths { paths in
+    let repository = try SnapshotRepository(paths: paths)
+    let emptyURL = paths.root.appendingPathComponent("empty-library.json")
+    try AtomicJSONStore().write(
+      LibraryExport(applicationVersion: "test", snapshots: []),
+      to: emptyURL
+    )
+
+    do {
+      _ = try repository.inspectLibraryImport(from: emptyURL)
+      Issue.record("空资料库不应进入导入确认")
+    } catch let error as StoreError {
+      #expect(error == StoreError.invalidFile("资料库中没有可导入的本地资料"))
+    } catch {
+      Issue.record("空资料库返回了错误的失败类型：\(error)")
+    }
+    #expect(try repository.loadSnapshots().isEmpty)
+  }
+}
+
+@Test
 func snapshotLibraryKeepsChangedGroupContextInAnotherSeries() throws {
   let state = try #require(DemoData.liveStates(referenceDate: referenceDate).first)
   let window = try #require(state.windows.first)

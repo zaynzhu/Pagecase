@@ -1,6 +1,6 @@
 import Foundation
 
-public enum BrowserKind: String, Codable, CaseIterable, Sendable {
+public enum BrowserKind: String, Codable, CaseIterable, Hashable, Sendable {
   case chrome
   case safari
 }
@@ -275,6 +275,59 @@ public struct LibraryExport: Codable, Equatable, Sendable {
     self.exportedAt = exportedAt
     self.applicationVersion = applicationVersion
     self.snapshots = snapshots
+  }
+}
+
+public struct LibraryImportBrowserSummary: Equatable, Sendable {
+  public let browserKind: BrowserKind
+  public let snapshotCount: Int
+  public let tabCount: Int
+  public let groupCount: Int
+  public let idConflictCount: Int
+
+  public init(
+    browserKind: BrowserKind,
+    snapshotCount: Int,
+    tabCount: Int,
+    groupCount: Int,
+    idConflictCount: Int
+  ) {
+    self.browserKind = browserKind
+    self.snapshotCount = snapshotCount
+    self.tabCount = tabCount
+    self.groupCount = groupCount
+    self.idConflictCount = idConflictCount
+  }
+}
+
+public struct LibraryImportPreview: Equatable, Sendable {
+  public let schemaVersion: Int
+  public let applicationVersion: String
+  public let exportedAt: Date
+  public let browserSummaries: [LibraryImportBrowserSummary]
+
+  public init(
+    schemaVersion: Int,
+    applicationVersion: String,
+    exportedAt: Date,
+    browserSummaries: [LibraryImportBrowserSummary]
+  ) {
+    self.schemaVersion = schemaVersion
+    self.applicationVersion = applicationVersion
+    self.exportedAt = exportedAt
+    self.browserSummaries = browserSummaries
+  }
+
+  public var snapshotCount: Int {
+    browserSummaries.reduce(0) { $0 + $1.snapshotCount }
+  }
+
+  public var idConflictCount: Int {
+    browserSummaries.reduce(0) { $0 + $1.idConflictCount }
+  }
+
+  public func summary(for browserKind: BrowserKind) -> LibraryImportBrowserSummary? {
+    browserSummaries.first { $0.browserKind == browserKind }
   }
 }
 

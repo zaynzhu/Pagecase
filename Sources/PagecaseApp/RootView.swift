@@ -67,6 +67,9 @@ struct RootView: View {
       }
     }
     .animation(.easeOut(duration: 0.18), value: model.notice)
+    .sheet(item: $model.pendingLibraryImport) { _ in
+      LibraryImportPreviewView(model: model)
+    }
   }
 
   private func focusSearchIfRequested() {

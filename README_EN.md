@@ -42,7 +42,7 @@ Let pages leave memory, not your reach.
 - **Restore on demand** — Focuses a page still open in Chrome, opens one page from a snapshot, or restores a complete tab group in order.
 - **Preserved context** — Keeps windows, group names, colors, order, and duplicate URLs instead of merging identical URLs from different contexts.
 - **Group version series** — Collects repeated saves of the same tab group into one series, prioritizing the latest snapshot while keeping every older version available.
-- **Local library management** — Supports confirmed deletion, complete-library backups, and separate exports for Chrome snapshots and Safari collections.
+- **Local library management** — Supports confirmed deletion, complete-library backups, browser-scoped exports, and a read-only Chrome / Safari import preview before confirmation.
 - **Native and lightweight** — Uses SwiftUI, AppKit, and a tiny Manifest V3 connector without Electron, WebView, a database, or cloud services.
 
 ---
@@ -219,6 +219,10 @@ Production data is stored by default in:
 
 Chrome snapshots and Safari collections share the `snapshots/` directory, while every JSON file persists its browser kind and source label so the app can keep them separate. Settings can export the complete library or browser-specific Chrome and Safari files; a scoped export never includes the other browser. Files contain full URLs that may include sensitive query parameters; treat copies and exports as browsing data.
 
+Before importing, Pagecase validates the complete file and opens a read-only preview. Chrome snapshots and Safari collections appear as separate selectable rows with record, page, group, and identifier-conflict counts. Canceling writes nothing, and conflicts are imported as new copies instead of replacing local data.
+
+![Browser-separated import preview](artifacts/qa-import-preview.png)
+
 ---
 
 ## 🧪 Development and Validation
@@ -245,7 +249,7 @@ npm run check:safari
 ./scripts/build-app.sh
 ```
 
-Pagecase 0.6.0 has passed 82 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run.
+Pagecase 0.6.0 has passed 89 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run.
 
 > [!NOTE]
 > A Command Line Tools-only environment cannot enumerate Swift Testing tests correctly. `swift test` still compiles the test package, while `PagecaseCoreChecks` executes the same critical behavior checks.

@@ -82,6 +82,26 @@ struct GroupFocusRequest: Equatable {
   }
 }
 
+struct PendingLibraryImport: Identifiable, Equatable {
+  let id = UUID()
+  let url: URL
+  let fileName: String
+  let preview: LibraryImportPreview
+  var selectedBrowserKinds: Set<BrowserKind>
+
+  var selectedSnapshotCount: Int {
+    preview.browserSummaries
+      .filter { selectedBrowserKinds.contains($0.browserKind) }
+      .reduce(0) { $0 + $1.snapshotCount }
+  }
+
+  var selectedIdConflictCount: Int {
+    preview.browserSummaries
+      .filter { selectedBrowserKinds.contains($0.browserKind) }
+      .reduce(0) { $0 + $1.idConflictCount }
+  }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
   static let applicationVersion = "0.6.0"
@@ -101,6 +121,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var collapsedGroupKeys: Set<String> = []
   @Published private(set) var groupFocusRequest: GroupFocusRequest?
   @Published private(set) var safariCapture: SafariCapture?
+  @Published var pendingLibraryImport: PendingLibraryImport?
   @Published var notice: AppNotice?
 
   let paths: AppPaths
@@ -999,12 +1020,70 @@ final class AppModel: ObservableObject {
     }
 
     do {
-      let imported = try snapshotRepository.importLibrary(from: url)
-      refresh(force: true)
-      notice = AppNotice(kind: .success, message: "已导入 \(imported.count) 份本地资料")
+      let preview = try snapshotRepository.inspectLibraryImport(from: url)
+      pendingLibraryImport = PendingLibraryImport(
+        url: url,
+        fileName: url.lastPathComponent,
+        preview: preview,
+        selectedBrowserKinds: Set(preview.browserSummaries.map(\.browserKind))
+      )
     } catch {
+      notice = AppNotice(kind: .error, message: "无法预览导入文件：\(error.localizedDescription)")
+    }
+  }
+
+  func togglePendingImportBrowser(_ browserKind: BrowserKind) {
+    guard var pendingLibraryImport else {
+      return
+    }
+    if pendingLibraryImport.selectedBrowserKinds.contains(browserKind) {
+      pendingLibraryImport.selectedBrowserKinds.remove(browserKind)
+    } else {
+      pendingLibraryImport.selectedBrowserKinds.insert(browserKind)
+    }
+    self.pendingLibraryImport = pendingLibraryImport
+  }
+
+  func cancelLibraryImport() {
+    pendingLibraryImport = nil
+  }
+
+  func confirmLibraryImport() {
+    guard let snapshotRepository,
+          let pendingLibraryImport,
+          !pendingLibraryImport.selectedBrowserKinds.isEmpty else {
+      return
+    }
+
+    do {
+      let imported = try snapshotRepository.importLibrary(
+        from: pendingLibraryImport.url,
+        browserKinds: pendingLibraryImport.selectedBrowserKinds
+      )
+      let summary = importResultSummary(imported)
+      let conflictSuffix = pendingLibraryImport.selectedIdConflictCount > 0
+        ? "，其中 \(pendingLibraryImport.selectedIdConflictCount) 份另存为副本"
+        : ""
+      self.pendingLibraryImport = nil
+      refresh(force: true)
+      notice = AppNotice(kind: .success, message: "已导入 \(summary)\(conflictSuffix)")
+    } catch {
+      self.pendingLibraryImport = nil
       notice = AppNotice(kind: .error, message: "导入失败：\(error.localizedDescription)")
     }
+  }
+
+  private func importResultSummary(_ snapshots: [SavedSnapshot]) -> String {
+    let chromeCount = snapshots.filter { $0.sourceKind == .chrome }.count
+    let safariCount = snapshots.filter { $0.sourceKind == .safari }.count
+    var parts: [String] = []
+    if chromeCount > 0 {
+      parts.append("\(chromeCount) 份 Chrome 快照")
+    }
+    if safariCount > 0 {
+      parts.append("\(safariCount) 份 Safari 合集")
+    }
+    return parts.joined(separator: "和")
   }
 
   func revealExtensionDirectory() {

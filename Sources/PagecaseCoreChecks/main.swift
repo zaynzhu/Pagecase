@@ -172,6 +172,7 @@ func runChecks() throws -> Int {
     }
     let chromeURL = paths.root.appendingPathComponent("chrome-library.json")
     let safariURL = paths.root.appendingPathComponent("safari-library.json")
+    let mixedURL = paths.root.appendingPathComponent("mixed-library.json")
     try repository.exportLibrary(
       to: chromeURL,
       applicationVersion: "check",
@@ -182,6 +183,7 @@ func runChecks() throws -> Int {
       applicationVersion: "check",
       browserKind: .safari
     )
+    try repository.exportLibrary(to: mixedURL, applicationVersion: "check")
     let decoder = PagecaseJSON.makeDecoder()
     let chromeExport = try decoder.decode(
       LibraryExport.self,
@@ -201,6 +203,58 @@ func runChecks() throws -> Int {
         && safariExport.snapshots.allSatisfy { $0.sourceKind == .safari },
       "Safari 单独导出混入了 Chrome 快照"
     )
+    let beforePreview = try repository.loadSnapshots()
+    let preview = try repository.inspectLibraryImport(from: mixedURL)
+    localPassed += try check(
+      preview.snapshotCount == 5
+        && preview.summary(for: .chrome)?.snapshotCount == 4
+        && preview.summary(for: .safari)?.snapshotCount == 1,
+      "导入预览没有按浏览器准确汇总"
+    )
+    localPassed += try check(
+      preview.summary(for: .chrome)?.idConflictCount == 4
+        && preview.summary(for: .safari)?.idConflictCount == 1,
+      "导入预览没有提前识别本地标识冲突"
+    )
+    localPassed += try check(
+      try repository.loadSnapshots() == beforePreview,
+      "只读导入预览意外修改了本地资料"
+    )
+    localPassed += try withTemporaryPaths { importPaths in
+      var importPassed = 0
+      let importRepository = try SnapshotRepository(paths: importPaths)
+      let emptySelection = try importRepository.importLibrary(
+        from: mixedURL,
+        browserKinds: []
+      )
+      importPassed += try check(
+        emptySelection.isEmpty && importRepository.loadSnapshots().isEmpty,
+        "空来源选择仍然写入了导入资料"
+      )
+      let safariImport = try importRepository.importLibrary(
+        from: mixedURL,
+        browserKinds: [.safari]
+      )
+      importPassed += try check(
+        safariImport.count == 1
+          && safariImport.allSatisfy { $0.sourceKind == .safari },
+        "Safari 专属导入混入了 Chrome 快照"
+      )
+      let chromeImport = try importRepository.importLibrary(
+        from: mixedURL,
+        browserKinds: [.chrome]
+      )
+      importPassed += try check(
+        chromeImport.count == 4
+          && chromeImport.allSatisfy { $0.sourceKind == .chrome },
+        "Chrome 专属导入混入了 Safari 合集"
+      )
+      importPassed += try check(
+        try importRepository.loadSnapshots().count == 5,
+        "分区导入完成后的资料数量不正确"
+      )
+      return importPassed
+    }
     return localPassed
   }
   guard let series = developmentSeries,

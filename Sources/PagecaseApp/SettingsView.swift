@@ -62,6 +62,10 @@ struct SettingsView: View {
           Text("导出文件包含网页完整网址和可能存在的查询参数。")
             .font(.system(size: 10))
             .foregroundStyle(Palette.muted(colorScheme))
+
+          Text("导入会先显示 Chrome 与 Safari 分区预览，确认前不会写入本地资料。")
+            .font(.system(size: 10))
+            .foregroundStyle(Palette.muted(colorScheme))
         }
 
         settingsSection("连接 Chrome") {

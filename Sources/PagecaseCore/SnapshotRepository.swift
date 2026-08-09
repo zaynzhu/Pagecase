@@ -143,20 +143,50 @@ public struct SnapshotRepository: Sendable {
     try store.write(payload, to: url, prettyPrinted: true)
   }
 
-  @discardableResult
-  public func importLibrary(from url: URL, now: Date = Date()) throws -> [SavedSnapshot] {
-    let payload = try store.read(LibraryExport.self, from: url)
-    guard payload.schemaVersion == PagecaseSchema.currentVersion else {
-      throw StoreError.unsupportedSchema(payload.schemaVersion)
+  public func inspectLibraryImport(from url: URL) throws -> LibraryImportPreview {
+    let payload = try readLibraryImport(from: url)
+    let existingIds = Set(try loadSnapshots().map(\.id))
+    let summaries: [LibraryImportBrowserSummary] = BrowserKind.allCases.compactMap { browserKind in
+      let snapshots = payload.snapshots.filter { $0.sourceKind == browserKind }
+      guard !snapshots.isEmpty else {
+        return nil
+      }
+      return LibraryImportBrowserSummary(
+        browserKind: browserKind,
+        snapshotCount: snapshots.count,
+        tabCount: snapshots.reduce(0) { $0 + $1.tabCount },
+        groupCount: snapshots.reduce(0) { $0 + $1.groupCount },
+        idConflictCount: snapshots.filter { existingIds.contains($0.id) }.count
+      )
     }
+    return LibraryImportPreview(
+      schemaVersion: payload.schemaVersion,
+      applicationVersion: payload.applicationVersion,
+      exportedAt: payload.exportedAt,
+      browserSummaries: summaries
+    )
+  }
 
-    try payload.snapshots.forEach(PagecaseValidator.validate)
+  @discardableResult
+  public func importLibrary(
+    from url: URL,
+    browserKinds: Set<BrowserKind> = Set(BrowserKind.allCases),
+    now: Date = Date()
+  ) throws -> [SavedSnapshot] {
+    let payload = try readLibraryImport(from: url)
+    guard !browserKinds.isEmpty else {
+      return []
+    }
+    let selectedSnapshots = payload.snapshots.filter { browserKinds.contains($0.sourceKind) }
+    guard !selectedSnapshots.isEmpty else {
+      throw StoreError.invalidFile("所选浏览器没有可导入的资料")
+    }
 
     let existing = try loadSnapshots()
     var occupiedIds = Set(existing.map(\.id))
     var imported: [SavedSnapshot] = []
 
-    for snapshot in payload.snapshots {
+    for snapshot in selectedSnapshots {
       let importedSnapshot: SavedSnapshot
       if occupiedIds.contains(snapshot.id) {
         importedSnapshot = SavedSnapshot(
@@ -178,6 +208,18 @@ public struct SnapshotRepository: Sendable {
 
     try replaceSnapshotLibrary(with: existing + imported)
     return imported
+  }
+
+  private func readLibraryImport(from url: URL) throws -> LibraryExport {
+    let payload = try store.read(LibraryExport.self, from: url)
+    guard payload.schemaVersion == PagecaseSchema.currentVersion else {
+      throw StoreError.unsupportedSchema(payload.schemaVersion)
+    }
+    guard !payload.snapshots.isEmpty else {
+      throw StoreError.invalidFile("资料库中没有可导入的本地资料")
+    }
+    try payload.snapshots.forEach(PagecaseValidator.validate)
+    return payload
   }
 
   private func replaceSnapshotLibrary(with snapshots: [SavedSnapshot]) throws {
