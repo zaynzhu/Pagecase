@@ -1,6 +1,16 @@
 import PagecaseCore
 import SwiftUI
 
+struct GroupRestoreTarget: Identifiable {
+  let snapshotId: String
+  let sourceId: String
+  let group: TabGroup
+
+  var id: String {
+    "\(snapshotId)-\(group.id)"
+  }
+}
+
 struct PageItemRow: View {
   let page: PageItem
   let actionTitle: String

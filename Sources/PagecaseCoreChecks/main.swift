@@ -193,6 +193,41 @@ func runChecks() throws -> Int {
     "快照名称搜索失败"
   )
 
+  let groupResults = SearchEngine.search(
+    query: "AI 工具",
+    liveStates: states,
+    snapshots: snapshots
+  )
+  passed += try check(
+    groupResults.first?.target == .group && groupResults.first?.kind == .live,
+    "标签组没有排在其成员网页之前"
+  )
+  passed += try check(
+    groupResults.first?.title == "AI 工具" && groupResults.first?.pageCount == 3,
+    "标签组搜索结果摘要不完整"
+  )
+  passed += try check(
+    groupResults.first?.windowId != nil && groupResults.first?.groupId != nil,
+    "实时标签组搜索结果缺少定位信息"
+  )
+  passed += try check(
+    groupResults.contains { $0.target == .page },
+    "标签组搜索遗漏了成员网页"
+  )
+  let snapshotGroupResult = groupResults.first {
+    $0.target == .group && $0.kind == .snapshot
+  }
+  passed += try check(
+    snapshotGroupResult?.snapshotId != nil
+      && snapshotGroupResult?.windowId != nil
+      && snapshotGroupResult?.groupId != nil,
+    "快照标签组搜索结果缺少定位信息"
+  )
+  passed += try check(
+    snapshotGroupResult?.url == nil,
+    "标签组搜索结果不应伪装成单个网页"
+  )
+
   let duplicateResults = SearchEngine.search(
     query: "shared-context",
     liveStates: states,

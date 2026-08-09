@@ -18,7 +18,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.3.0-2F3437?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.4.0-2F3437?style=flat-square)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-787774?style=flat-square&logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-6-D97757?style=flat-square&logo=swift&logoColor=white)
 
@@ -36,7 +36,7 @@
 - **实时镜像 Chrome** — 展示普通窗口、原生标签组、未分组网页和原有顺序，不读取网页正文。
 - **按现场或分组保存** — 可以保存完整 Chrome 现场，也可以只保存一个标签组；两者写入后都不会被后续变化改写。
 - **判断是否放心关闭** — 实时显示完整现场和每个标签组的保存覆盖状态，新增网页会标出未保存数量。
-- **快速找回网页** — 搜索标题、域名、完整网址、标签组和快照名称，支持 `⌘K` 与完整键盘导航。
+- **快速找回网页与分组** — 搜索标题、域名、完整网址、标签组和快照名称；标签组作为独立结果，可直接查看或从快照确认恢复。
 - **按需恢复** — 定位仍在 Chrome 中的网页、从快照打开单页，或按原顺序恢复完整标签组。
 - **保留整理语境** — 保存窗口、组名、颜色、顺序和重复网址，不把不同语境中的相同网址强行去重。
 - **本地资料管理** — 支持快照重命名、带确认的删除，以及版本化 JSON 资料库导入与导出。
@@ -106,12 +106,14 @@ open "dist/页匣.app"
 
 ![单个标签组保存状态](artifacts/qa-group-save-states.png)
 
-### 搜索并找回一个网页
+### 搜索并找回网页或标签组
 
 按 `⌘K` 输入标题、域名、网址、标签组或快照名称：
 
 - 实时结果使用“定位”，只聚焦已经打开的标签。
 - 快照结果使用“打开”，只新建一个标签。
+- 标签组结果使用“查看”，只在页匣内打开并展开对应位置；快照标签组另有“恢复整组”，确认网页数量后才会创建标签。
+- Return 对标签组执行“查看”，不会直接恢复整组。
 - 来源离线或数据过期时，相关动作会禁用，但本地快照仍可浏览和搜索。
 
 ### 恢复或删除快照内容
@@ -201,7 +203,7 @@ npm run test:bridge
 ./scripts/build-app.sh
 ```
 
-当前 0.3.0 版本已通过 53 项 Swift 核心行为检查、10 项扩展测试、Bridge 协议往返、扩展危险 API 扫描、Release 构建、视觉验收和 500 页性能验收。
+当前 0.4.0 版本已通过 59 项 Swift 核心行为检查、10 项扩展测试、Bridge 协议往返、扩展危险 API 扫描、Release 构建、视觉验收和 500 页性能验收。
 
 > [!NOTE]
 > 仅安装 Command Line Tools 的环境无法正常枚举 Swift Testing 测试；`swift test` 仍负责编译测试包，`PagecaseCoreChecks` 会实际执行同一组关键行为检查。

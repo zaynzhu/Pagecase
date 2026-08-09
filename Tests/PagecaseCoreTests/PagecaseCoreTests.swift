@@ -278,6 +278,34 @@ func searchMatchesTitleGroupDomainURLAndSnapshotName() {
 }
 
 @Test
+func searchReturnsGroupsBeforeTheirPagesWithNavigationMetadata() throws {
+  let states = DemoData.liveStates(referenceDate: referenceDate)
+  let snapshots = DemoData.snapshots(referenceDate: referenceDate)
+  let results = SearchEngine.search(
+    query: "AI 工具",
+    liveStates: states,
+    snapshots: snapshots
+  )
+  let first = try #require(results.first)
+
+  #expect(first.target == .group)
+  #expect(first.kind == .live)
+  #expect(first.title == "AI 工具")
+  #expect(first.windowId != nil)
+  #expect(first.groupId != nil)
+  #expect(first.pageCount == 3)
+  #expect(results.contains { $0.target == .page })
+
+  let snapshotGroup = try #require(
+    results.first { $0.target == .group && $0.kind == .snapshot }
+  )
+  #expect(snapshotGroup.snapshotId != nil)
+  #expect(snapshotGroup.windowId != nil)
+  #expect(snapshotGroup.groupId != nil)
+  #expect(snapshotGroup.url == nil)
+}
+
+@Test
 func searchPreservesDuplicateURLsAndUsesUniqueResultIds() {
   let states = DemoData.liveStates(referenceDate: referenceDate)
   let snapshots = DemoData.snapshots(referenceDate: referenceDate)

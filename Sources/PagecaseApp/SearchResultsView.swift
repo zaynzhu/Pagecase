@@ -7,6 +7,7 @@ struct SearchResultsView: View {
   @ObservedObject var model: AppModel
   @Environment(\.colorScheme) private var colorScheme
   @State private var visibleResultCount = resultBatchSize
+  @State private var restoreTarget: GroupRestoreTarget?
 
   var body: some View {
     ScrollViewReader { proxy in
@@ -23,65 +24,14 @@ struct SearchResultsView: View {
           .padding(.bottom, 20)
 
           if model.searchResults.isEmpty {
-            Text("没有找到匹配的网页。可以尝试标题、域名、标签组或快照名称。")
+            Text("没有找到匹配的网页或标签组。可以尝试标题、域名、组名或快照名称。")
               .font(.system(size: 12))
               .foregroundStyle(Palette.muted(colorScheme))
               .padding(.vertical, 30)
           } else {
             ForEach(Array(visibleResults.enumerated()), id: \.element.id) { index, result in
-              let actionEnabled = model.isSearchActionAvailable(result)
-              let actionTitle = model.searchActionTitle(for: result)
-
-              Button {
-                model.selectSearchResult(result)
-                model.activate(result)
-              } label: {
-                HStack(spacing: 14) {
-                  Text(result.kind == .live ? "现在" : "快照")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(
-                      result.kind == .live
-                        ? Color(red: 0.12, green: 0.38, blue: 0.58)
-                        : Color(red: 0.20, green: 0.42, blue: 0.23)
-                    )
-                    .frame(width: 34, alignment: .leading)
-
-                  VStack(alignment: .leading, spacing: 3) {
-                    Text(result.title)
-                      .font(.system(size: 13, weight: .medium))
-                      .lineLimit(1)
-
-                    Text("\(result.sourceLabel) › \(result.context)")
-                      .font(.system(size: 10))
-                      .foregroundStyle(Palette.muted(colorScheme))
-                      .lineLimit(1)
-                  }
-
-                  Spacer()
-
-                  Text(result.domain)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(Palette.muted(colorScheme))
-                    .lineLimit(1)
-
-                  Text(actionTitle)
-                    .font(.system(size: 11, weight: .semibold))
-                    .frame(width: 74, alignment: .trailing)
-                }
-                .padding(.horizontal, 12)
-                .frame(minHeight: 55)
-                .contentShape(Rectangle())
-                .background(
-                  model.selectedSearchResult?.id == result.id
-                    ? Palette.selection(colorScheme)
-                    : .clear
-                )
-              }
-              .buttonStyle(.plain)
-              .disabled(!actionEnabled)
-              .opacity(actionEnabled ? 1 : 0.62)
-              .accessibilityLabel("\(result.title)，\(actionTitle)")
-              .id(result.id)
+              searchResultRow(result)
+                .id(result.id)
 
               if index < visibleResults.count - 1 || hasMoreResults {
                 Divider()
@@ -126,6 +76,157 @@ struct SearchResultsView: View {
         revealSelection(selectedId, proxy: proxy)
       }
     }
+    .confirmationDialog(
+      restoreDialogTitle,
+      isPresented: Binding(
+        get: { restoreTarget != nil },
+        set: { if !$0 { restoreTarget = nil } }
+      ),
+      titleVisibility: .visible
+    ) {
+      if let restoreTarget {
+        Button("打开 \(restoreTarget.group.tabs.count) 个网页") {
+          model.restore(group: restoreTarget.group, sourceId: restoreTarget.sourceId)
+          self.restoreTarget = nil
+        }
+      }
+      Button("取消", role: .cancel) {
+        restoreTarget = nil
+      }
+    } message: {
+      Text("将在 Chrome 中按原顺序新建并组合这些网页，不会关闭、移动或改变任何已有标签。")
+    }
+  }
+
+  private func resultSummary(
+    _ result: SearchResult,
+    actionTitle: String
+  ) -> some View {
+    HStack(spacing: 14) {
+      Text(result.kind == .live ? "现在" : "快照")
+        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+        .foregroundStyle(
+          result.kind == .live
+            ? Color(red: 0.12, green: 0.38, blue: 0.58)
+            : Color(red: 0.20, green: 0.42, blue: 0.23)
+        )
+        .frame(width: 34, alignment: .leading)
+
+      VStack(alignment: .leading, spacing: 3) {
+        Text(result.title)
+          .font(.system(size: 13, weight: .medium))
+          .lineLimit(1)
+
+        Text(resultContext(result))
+          .font(.system(size: 10))
+          .foregroundStyle(Palette.muted(colorScheme))
+          .lineLimit(1)
+      }
+
+      Spacer()
+
+      Text(resultMetadata(result))
+        .font(.system(size: 10, design: .monospaced))
+        .foregroundStyle(Palette.muted(colorScheme))
+        .lineLimit(1)
+
+      Text(actionTitle)
+        .font(.system(size: 11, weight: .semibold))
+        .frame(width: 52, alignment: .trailing)
+    }
+    .padding(.horizontal, 12)
+    .frame(maxWidth: .infinity)
+    .frame(minHeight: 55)
+    .contentShape(Rectangle())
+  }
+
+  private func searchResultRow(_ result: SearchResult) -> some View {
+    let actionEnabled = model.isSearchActionAvailable(result)
+    let actionTitle = model.searchActionTitle(for: result)
+
+    return HStack(spacing: 0) {
+      Button {
+        model.selectSearchResult(result)
+        model.activate(result)
+      } label: {
+        resultSummary(result, actionTitle: actionTitle)
+      }
+      .buttonStyle(.plain)
+      .disabled(!actionEnabled)
+      .opacity(actionEnabled ? 1 : 0.62)
+      .accessibilityLabel("\(result.title)，\(actionTitle)")
+
+      if result.target == .group && result.kind == .snapshot {
+        snapshotRestoreAction(result)
+      }
+    }
+    .background(
+      model.selectedSearchResult?.id == result.id
+        ? Palette.selection(colorScheme)
+        : .clear
+    )
+  }
+
+  private func snapshotRestoreAction(_ result: SearchResult) -> some View {
+    let actionEnabled = model.isSourceActionAvailable(result.sourceId)
+    let actionTitle = restoreActionTitle(result)
+
+    return HStack(spacing: 0) {
+      Divider()
+        .frame(height: 24)
+
+      Button {
+        prepareRestore(result)
+      } label: {
+        Text(actionTitle)
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundStyle(Palette.muted(colorScheme))
+          .frame(width: 88)
+          .frame(minHeight: 55)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .disabled(!actionEnabled)
+      .opacity(actionEnabled ? 1 : 0.62)
+      .accessibilityLabel("\(result.title)，\(actionTitle)")
+    }
+  }
+
+  private func resultContext(_ result: SearchResult) -> String {
+    let targetLabel = result.target == .group ? "标签组" : "网页"
+    return "\(result.sourceLabel) › \(targetLabel) › \(result.context)"
+  }
+
+  private func resultMetadata(_ result: SearchResult) -> String {
+    if result.target == .group {
+      return "\(result.pageCount ?? 0) 个网页"
+    }
+    return result.domain ?? ""
+  }
+
+  private func restoreActionTitle(_ result: SearchResult) -> String {
+    model.isSourceActionAvailable(result.sourceId) ? "恢复整组" : "Chrome 未连接"
+  }
+
+  private func prepareRestore(_ result: SearchResult) {
+    model.selectSearchResult(result)
+    guard let snapshotId = result.snapshotId,
+          let group = model.searchGroup(for: result) else {
+      model.notice = AppNotice(kind: .warning, message: "这个标签组已经不在当前快照中")
+      return
+    }
+    restoreTarget = GroupRestoreTarget(
+      snapshotId: snapshotId,
+      sourceId: result.sourceId,
+      group: group
+    )
+  }
+
+  private var restoreDialogTitle: String {
+    guard let restoreTarget else {
+      return "恢复标签组？"
+    }
+    return "恢复「\(restoreTarget.group.displayTitle)」？"
   }
 
   private var visibleResults: ArraySlice<SearchResult> {

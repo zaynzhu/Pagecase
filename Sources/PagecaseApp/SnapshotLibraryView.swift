@@ -1,16 +1,6 @@
 import PagecaseCore
 import SwiftUI
 
-private struct GroupRestoreTarget: Identifiable {
-  let snapshotId: String
-  let sourceId: String
-  let group: TabGroup
-
-  var id: String {
-    "\(snapshotId)-\(group.id)"
-  }
-}
-
 struct SnapshotLibraryView: View {
   @ObservedObject var model: AppModel
   @Environment(\.colorScheme) private var colorScheme
@@ -231,7 +221,7 @@ struct SnapshotLibraryView: View {
         .onAppear {
           focusRequestedGroup(using: proxy)
         }
-        .onChange(of: model.snapshotGroupFocusRequest) { _, _ in
+        .onChange(of: model.groupFocusRequest) { _, _ in
           focusRequestedGroup(using: proxy)
         }
       }
@@ -270,8 +260,10 @@ struct SnapshotLibraryView: View {
   }
 
   private func focusRequestedGroup(using proxy: ScrollViewProxy) {
-    guard let request = model.consumeSnapshotGroupFocusRequest(),
-          request.snapshotId == model.selectedSnapshot?.id else {
+    guard let snapshot = model.selectedSnapshot,
+          let request = model.consumeGroupFocusRequest(
+            scope: "snapshot:\(snapshot.id)"
+          ) else {
       return
     }
     DispatchQueue.main.async {

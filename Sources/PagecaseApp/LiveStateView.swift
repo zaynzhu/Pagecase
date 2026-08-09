@@ -22,59 +22,67 @@ struct LiveStateView: View {
   var body: some View {
     Group {
       if let state = model.selectedLiveState {
-        ScrollView {
-          LazyVStack(alignment: .leading, spacing: 22) {
-            header(state)
+        ScrollViewReader { proxy in
+          ScrollView {
+            LazyVStack(alignment: .leading, spacing: 22) {
+              header(state)
 
-            ForEach(state.windows) { window in
-              WindowSection(
-                window: window,
-                action: { page in
-                  model.focus(page: page, sourceId: state.source.id)
-                },
-                actionTitle: model.liveActionTitle(for: state.source.id),
-                actionEnabled: model.isSourceActionAvailable(state.source.id),
-                isGroupExpanded: { groupId in
-                  model.isGroupExpanded(
-                    scope: "live:\(state.source.id)",
-                    windowId: window.id,
-                    groupId: groupId
-                  )
-                },
-                toggleGroupExpansion: { groupId in
-                  model.toggleGroupExpansion(
-                    scope: "live:\(state.source.id)",
-                    windowId: window.id,
-                    groupId: groupId
-                  )
-                },
-                groupCoverage: { group in
-                  SnapshotCoverageEvaluator.evaluate(
-                    group: group,
-                    sourceId: state.source.id,
-                    snapshots: model.snapshots
-                  )
-                },
-                groupActionTitle: { group in
-                  groupActionTitle(for: group, sourceId: state.source.id)
-                },
-                groupActionEnabled: { _ in true },
-                groupAction: { group in
-                  handleGroupAction(
-                    group,
-                    windowId: window.id,
-                    sourceId: state.source.id
-                  )
-                }
-              )
+              ForEach(state.windows) { window in
+                WindowSection(
+                  window: window,
+                  action: { page in
+                    model.focus(page: page, sourceId: state.source.id)
+                  },
+                  actionTitle: model.liveActionTitle(for: state.source.id),
+                  actionEnabled: model.isSourceActionAvailable(state.source.id),
+                  isGroupExpanded: { groupId in
+                    model.isGroupExpanded(
+                      scope: "live:\(state.source.id)",
+                      windowId: window.id,
+                      groupId: groupId
+                    )
+                  },
+                  toggleGroupExpansion: { groupId in
+                    model.toggleGroupExpansion(
+                      scope: "live:\(state.source.id)",
+                      windowId: window.id,
+                      groupId: groupId
+                    )
+                  },
+                  groupCoverage: { group in
+                    SnapshotCoverageEvaluator.evaluate(
+                      group: group,
+                      sourceId: state.source.id,
+                      snapshots: model.snapshots
+                    )
+                  },
+                  groupActionTitle: { group in
+                    groupActionTitle(for: group, sourceId: state.source.id)
+                  },
+                  groupActionEnabled: { _ in true },
+                  groupAction: { group in
+                    handleGroupAction(
+                      group,
+                      windowId: window.id,
+                      sourceId: state.source.id
+                    )
+                  }
+                )
+              }
             }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 26)
+            .frame(maxWidth: 920, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
           }
-          .padding(.horizontal, 28)
-          .padding(.vertical, 26)
-          .frame(maxWidth: 920, alignment: .leading)
-          .frame(maxWidth: .infinity, alignment: .topLeading)
+          .background(Palette.canvas(colorScheme))
+          .onAppear {
+            focusRequestedGroup(state: state, using: proxy)
+          }
+          .onChange(of: model.groupFocusRequest) { _, _ in
+            focusRequestedGroup(state: state, using: proxy)
+          }
         }
-        .background(Palette.canvas(colorScheme))
         .sheet(isPresented: $showingSaveSheet) {
           SnapshotNameSheet(
             title: "保存当前现场",
@@ -233,6 +241,19 @@ struct LiveStateView: View {
       pageCount: group.tabs.count
     )
   }
+
+  private func focusRequestedGroup(
+    state: LiveState,
+    using proxy: ScrollViewProxy
+  ) {
+    let scope = "live:\(state.source.id)"
+    guard let request = model.consumeGroupFocusRequest(scope: scope) else {
+      return
+    }
+    DispatchQueue.main.async {
+      proxy.scrollTo(request.anchorId, anchor: .center)
+    }
+  }
 }
 
 struct WindowSection: View {
@@ -294,7 +315,7 @@ struct WindowSection: View {
               { action(group) }
             }
           )
-          .id("snapshot-group-\(window.id)-\(group.id)")
+          .id("group-\(window.id)-\(group.id)")
         }
 
         if !window.ungroupedTabs.isEmpty {

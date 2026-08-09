@@ -18,7 +18,7 @@ Let pages leave memory, not your reach.
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.3.0-2F3437?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.4.0-2F3437?style=flat-square)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-787774?style=flat-square&logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-6-D97757?style=flat-square&logo=swift&logoColor=white)
 
@@ -36,7 +36,7 @@ Let pages leave memory, not your reach.
 - **Live Chrome mirror** — Shows regular windows, native tab groups, ungrouped pages, and their original order without reading page content.
 - **Full-state or group snapshots** — Save the complete Chrome state or one tab group; neither is overwritten by later Chrome changes.
 - **Safe-to-close status** — Shows snapshot coverage for the complete live state and each tab group, including the number of newly unsaved pages.
-- **Fast retrieval** — Searches titles, domains, full URLs, tab groups, and snapshot names with `⌘K` and complete keyboard navigation.
+- **Fast page and group retrieval** — Searches titles, domains, full URLs, tab groups, and snapshot names; groups appear as first-class results that can be viewed or explicitly restored from snapshots.
 - **Restore on demand** — Focuses a page still open in Chrome, opens one page from a snapshot, or restores a complete tab group in order.
 - **Preserved context** — Keeps windows, group names, colors, order, and duplicate URLs instead of merging identical URLs from different contexts.
 - **Local library management** — Supports snapshot renaming, confirmed deletion, and versioned JSON library import and export.
@@ -106,12 +106,14 @@ A group snapshot preserves the group name, color, page order, and duplicate URLs
 
 ![Tab group save states](artifacts/qa-group-save-states.png)
 
-### Search for and retrieve one page
+### Search for and retrieve a page or group
 
 Press `⌘K` and search by title, domain, URL, tab group, or snapshot name:
 
 - A live result uses Focus and only activates an already open tab.
 - A snapshot result uses Open and creates only one new tab.
+- A group result uses View and only navigates inside Pagecase. Snapshot groups expose a separate Restore Group action that confirms the page count before creating tabs.
+- Return on a group performs View and never restores the group directly.
 - When a source is offline or stale, its actions are disabled while local snapshots remain searchable and readable.
 
 ### Restore a group or delete a snapshot
@@ -201,7 +203,7 @@ npm run test:bridge
 ./scripts/build-app.sh
 ```
 
-Pagecase 0.3.0 has passed 53 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, the dangerous-extension-API scan, Release builds, visual acceptance, and the 500-page performance run.
+Pagecase 0.4.0 has passed 59 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, the dangerous-extension-API scan, Release builds, visual acceptance, and the 500-page performance run.
 
 > [!NOTE]
 > A Command Line Tools-only environment cannot enumerate Swift Testing tests correctly. `swift test` still compiles the test package, while `PagecaseCoreChecks` executes the same critical behavior checks.

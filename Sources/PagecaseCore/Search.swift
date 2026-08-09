@@ -5,34 +5,48 @@ public enum SearchResultKind: String, Codable, Sendable {
   case snapshot
 }
 
+public enum SearchResultTarget: String, Codable, Sendable {
+  case page
+  case group
+}
+
 public struct SearchResult: Identifiable, Equatable, Sendable {
   public let id: String
   public let kind: SearchResultKind
+  public let target: SearchResultTarget
   public let title: String
-  public let url: String
-  public let domain: String
+  public let url: String?
+  public let domain: String?
   public let sourceId: String
   public let sourceLabel: String
   public let context: String
   public let capturedAt: Date
   public let tabId: Int?
   public let windowId: Int?
+  public let snapshotId: String?
+  public let groupId: Int?
+  public let pageCount: Int?
 
   public init(
     id: String,
     kind: SearchResultKind,
+    target: SearchResultTarget,
     title: String,
-    url: String,
-    domain: String,
+    url: String?,
+    domain: String?,
     sourceId: String,
     sourceLabel: String,
     context: String,
     capturedAt: Date,
     tabId: Int?,
-    windowId: Int?
+    windowId: Int?,
+    snapshotId: String?,
+    groupId: Int?,
+    pageCount: Int?
   ) {
     self.id = id
     self.kind = kind
+    self.target = target
     self.title = title
     self.url = url
     self.domain = domain
@@ -42,6 +56,9 @@ public struct SearchResult: Identifiable, Equatable, Sendable {
     self.capturedAt = capturedAt
     self.tabId = tabId
     self.windowId = windowId
+    self.snapshotId = snapshotId
+    self.groupId = groupId
+    self.pageCount = pageCount
   }
 }
 
@@ -61,7 +78,7 @@ public enum SearchEngine {
 
     for state in liveStates {
       let sourceLabel = sourceLabels[state.source.id] ?? state.source.label
-      appendPages(
+      appendItems(
         windows: state.windows,
         sourceId: state.source.id,
         sourceLabel: sourceLabel,
@@ -76,7 +93,7 @@ public enum SearchEngine {
 
     for snapshot in snapshots {
       let sourceLabel = sourceLabels[snapshot.sourceId] ?? "Chrome"
-      appendPages(
+      appendItems(
         windows: snapshot.windows,
         sourceId: snapshot.sourceId,
         sourceLabel: sourceLabel,
@@ -100,7 +117,7 @@ public enum SearchEngine {
     }.map(\.result)
   }
 
-  private static func appendPages(
+  private static func appendItems(
     windows: [BrowserWindow],
     sourceId: String,
     sourceLabel: String,
@@ -113,6 +130,19 @@ public enum SearchEngine {
   ) {
     for window in windows {
       for group in window.groups {
+        appendGroup(
+          group: group,
+          window: window,
+          sourceId: sourceId,
+          sourceLabel: sourceLabel,
+          containerId: containerId,
+          containerName: containerName,
+          capturedAt: capturedAt,
+          kind: kind,
+          normalizedQuery: normalizedQuery,
+          into: &scored
+        )
+
         for page in group.tabs {
           append(
             page: page,
@@ -148,6 +178,52 @@ public enum SearchEngine {
     }
   }
 
+  private static func appendGroup(
+    group: TabGroup,
+    window: BrowserWindow,
+    sourceId: String,
+    sourceLabel: String,
+    containerId: String,
+    containerName: String?,
+    capturedAt: Date,
+    kind: SearchResultKind,
+    normalizedQuery: String,
+    into scored: inout [(score: Int, result: SearchResult)]
+  ) {
+    let normalizedTitle = normalize(group.displayTitle)
+    let score: Int
+    if normalizedTitle == normalizedQuery {
+      score = 800
+    } else if normalizedTitle.hasPrefix(normalizedQuery) {
+      score = 750
+    } else if normalizedTitle.contains(normalizedQuery) {
+      score = 700
+    } else {
+      return
+    }
+
+    let contextParts = [containerName, "窗口 \(window.order + 1)"].compactMap { $0 }
+    let identityPrefix = kind == .live ? "live" : "snapshot"
+    let result = SearchResult(
+      id: "\(identityPrefix)-group-\(sourceId)-\(containerId)-\(window.id)-\(group.id)",
+      kind: kind,
+      target: .group,
+      title: group.displayTitle,
+      url: nil,
+      domain: nil,
+      sourceId: sourceId,
+      sourceLabel: sourceLabel,
+      context: contextParts.joined(separator: " › "),
+      capturedAt: capturedAt,
+      tabId: nil,
+      windowId: window.id,
+      snapshotId: kind == .snapshot ? containerId : nil,
+      groupId: group.id,
+      pageCount: group.tabs.count
+    )
+    scored.append((score, result))
+  }
+
   private static func append(
     page: PageItem,
     groupName: String,
@@ -177,6 +253,7 @@ public enum SearchEngine {
     let result = SearchResult(
       id: "\(identityPrefix)-\(sourceId)-\(containerId)-\(windowOrder)-\(page.id)-\(page.index)",
       kind: kind,
+      target: .page,
       title: page.displayTitle,
       url: page.url,
       domain: page.domain,
@@ -185,7 +262,10 @@ public enum SearchEngine {
       context: contextParts.joined(separator: " › "),
       capturedAt: capturedAt,
       tabId: kind == .live ? page.id : nil,
-      windowId: kind == .live ? page.windowId : nil
+      windowId: kind == .live ? page.windowId : nil,
+      snapshotId: kind == .snapshot ? containerId : nil,
+      groupId: nil,
+      pageCount: nil
     )
     scored.append((score, result))
   }

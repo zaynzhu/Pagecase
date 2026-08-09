@@ -50,20 +50,20 @@ enum SourceAvailability: Equatable {
   case missing
 }
 
-struct SnapshotGroupFocusRequest: Equatable {
+struct GroupFocusRequest: Equatable {
   let id = UUID()
-  let snapshotId: String
+  let scope: String
   let windowId: Int
   let groupId: Int
 
   var anchorId: String {
-    "snapshot-group-\(windowId)-\(groupId)"
+    "group-\(windowId)-\(groupId)"
   }
 }
 
 @MainActor
 final class AppModel: ObservableObject {
-  static let applicationVersion = "0.3.0"
+  static let applicationVersion = "0.4.0"
 
   @Published var selection: NavigationItem = .live
   @Published var liveStates: [LiveState] = []
@@ -77,7 +77,7 @@ final class AppModel: ObservableObject {
   @Published var nativeHostStatus: NativeHostStatus
   @Published private(set) var sourceAvailabilityById: [String: SourceAvailability] = [:]
   @Published private(set) var collapsedGroupKeys: Set<String> = []
-  @Published private(set) var snapshotGroupFocusRequest: SnapshotGroupFocusRequest?
+  @Published private(set) var groupFocusRequest: GroupFocusRequest?
   @Published var notice: AppNotice?
 
   let paths: AppPaths
@@ -330,10 +330,16 @@ final class AppModel: ObservableObject {
   }
 
   func isSearchActionAvailable(_ result: SearchResult) -> Bool {
-    isSourceActionAvailable(result.sourceId)
+    if result.target == .group {
+      return true
+    }
+    return isSourceActionAvailable(result.sourceId)
   }
 
   func searchActionTitle(for result: SearchResult) -> String {
+    if result.target == .group {
+      return "查看"
+    }
     switch result.kind {
     case .live:
       return liveActionTitle(for: result.sourceId)
@@ -454,23 +460,69 @@ final class AppModel: ObservableObject {
       return
     }
 
-    let scope = "snapshot:\(snapshot.id)"
-    if !isGroupExpanded(scope: scope, windowId: windowId, groupId: groupId) {
-      toggleGroupExpansion(scope: scope, windowId: windowId, groupId: groupId)
-    }
-    selectedSnapshotId = snapshot.id
-    selection = .snapshots
-    searchQuery = ""
-    snapshotGroupFocusRequest = SnapshotGroupFocusRequest(
-      snapshotId: snapshot.id,
-      windowId: windowId,
-      groupId: groupId
-    )
+    showSnapshotGroup(snapshotId: snapshot.id, windowId: windowId, groupId: groupId)
   }
 
-  func consumeSnapshotGroupFocusRequest() -> SnapshotGroupFocusRequest? {
-    defer { snapshotGroupFocusRequest = nil }
-    return snapshotGroupFocusRequest
+  func showSearchGroup(_ result: SearchResult) {
+    guard result.target == .group,
+          let windowId = result.windowId,
+          let groupId = result.groupId,
+          searchGroup(for: result) != nil else {
+      notice = AppNotice(kind: .warning, message: "这个标签组已经不在当前资料中")
+      return
+    }
+
+    switch result.kind {
+    case .live:
+      let scope = "live:\(result.sourceId)"
+      expandGroupIfNeeded(scope: scope, windowId: windowId, groupId: groupId)
+      selectedSourceId = result.sourceId
+      selection = .live
+      searchQuery = ""
+      groupFocusRequest = GroupFocusRequest(
+        scope: scope,
+        windowId: windowId,
+        groupId: groupId
+      )
+    case .snapshot:
+      guard let snapshotId = result.snapshotId else {
+        notice = AppNotice(kind: .warning, message: "这个搜索结果缺少快照位置")
+        return
+      }
+      showSnapshotGroup(snapshotId: snapshotId, windowId: windowId, groupId: groupId)
+    }
+  }
+
+  func searchGroup(for result: SearchResult) -> TabGroup? {
+    guard result.target == .group,
+          let windowId = result.windowId,
+          let groupId = result.groupId else {
+      return nil
+    }
+
+    switch result.kind {
+    case .live:
+      return liveStates
+        .first(where: { $0.source.id == result.sourceId })?
+        .windows.first(where: { $0.id == windowId })?
+        .groups.first(where: { $0.id == groupId })
+    case .snapshot:
+      guard let snapshotId = result.snapshotId else {
+        return nil
+      }
+      return snapshots
+        .first(where: { $0.id == snapshotId })?
+        .windows.first(where: { $0.id == windowId })?
+        .groups.first(where: { $0.id == groupId })
+    }
+  }
+
+  func consumeGroupFocusRequest(scope: String) -> GroupFocusRequest? {
+    guard groupFocusRequest?.scope == scope else {
+      return nil
+    }
+    defer { groupFocusRequest = nil }
+    return groupFocusRequest
   }
 
   func renameSnapshot(_ snapshot: SavedSnapshot, name: String) -> Bool {
@@ -505,6 +557,11 @@ final class AppModel: ObservableObject {
   }
 
   func activate(_ result: SearchResult) {
+    if result.target == .group {
+      showSearchGroup(result)
+      return
+    }
+
     switch result.kind {
     case .live:
       guard let tabId = result.tabId, let windowId = result.windowId else {
@@ -521,11 +578,15 @@ final class AppModel: ObservableObject {
         demoMessage: "演示模式不会定位真实 Chrome 标签"
       )
     case .snapshot:
+      guard let url = result.url else {
+        notice = AppNotice(kind: .error, message: "网页地址不完整")
+        return
+      }
       enqueue(
         BrowserCommand(
           sourceId: result.sourceId,
           action: .openUrl,
-          url: result.url
+          url: url
         ),
         demoMessage: "演示模式不会在 Chrome 中打开网页"
       )
@@ -546,6 +607,33 @@ final class AppModel: ObservableObject {
       return
     }
     activate(result)
+  }
+
+  private func showSnapshotGroup(
+    snapshotId: String,
+    windowId: Int,
+    groupId: Int
+  ) {
+    let scope = "snapshot:\(snapshotId)"
+    expandGroupIfNeeded(scope: scope, windowId: windowId, groupId: groupId)
+    selectedSnapshotId = snapshotId
+    selection = .snapshots
+    searchQuery = ""
+    groupFocusRequest = GroupFocusRequest(
+      scope: scope,
+      windowId: windowId,
+      groupId: groupId
+    )
+  }
+
+  private func expandGroupIfNeeded(
+    scope: String,
+    windowId: Int,
+    groupId: Int
+  ) {
+    if !isGroupExpanded(scope: scope, windowId: windowId, groupId: groupId) {
+      toggleGroupExpansion(scope: scope, windowId: windowId, groupId: groupId)
+    }
   }
 
   func selectSearchResult(_ result: SearchResult) {
