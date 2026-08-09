@@ -98,7 +98,8 @@ public enum SnapshotLibraryOrganizer {
   }
 
   private static func groupIdentity(for snapshot: SavedSnapshot) -> GroupIdentity? {
-    guard snapshot.scope == .group,
+    guard snapshot.sourceKind == .chrome,
+          snapshot.scope == .group,
           snapshot.windows.count == 1,
           let window = snapshot.windows.first,
           window.groups.count == 1,

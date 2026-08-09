@@ -142,6 +142,28 @@ struct ConnectionBadge: View {
   }
 }
 
+struct BrowserModeBadge: View {
+  let kind: BrowserKind
+  let label: String
+
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    HStack(spacing: 6) {
+      Image(systemName: kind.symbol)
+        .font(.system(size: 10, weight: .semibold))
+      Text(label)
+        .font(.system(size: 11, weight: .semibold))
+    }
+    .foregroundStyle(kind.accentColor)
+    .padding(.horizontal, 9)
+    .padding(.vertical, 5)
+    .background(kind.tint(colorScheme))
+    .clipShape(Capsule())
+    .accessibilityLabel("\(kind.displayName)，\(label)")
+  }
+}
+
 struct PrimaryButtonStyle: ButtonStyle {
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.isEnabled) private var isEnabled
@@ -256,6 +278,7 @@ struct SnapshotNameSheet: View {
   let title: String
   let initialName: String
   let confirmTitle: String
+  let namePlaceholder: String
   let onConfirm: (String) -> Bool
 
   @Environment(\.dismiss) private var dismiss
@@ -266,11 +289,13 @@ struct SnapshotNameSheet: View {
     title: String,
     initialName: String,
     confirmTitle: String,
+    namePlaceholder: String = "快照名称",
     onConfirm: @escaping (String) -> Bool
   ) {
     self.title = title
     self.initialName = initialName
     self.confirmTitle = confirmTitle
+    self.namePlaceholder = namePlaceholder
     self.onConfirm = onConfirm
     _name = State(initialValue: initialName)
   }
@@ -280,12 +305,12 @@ struct SnapshotNameSheet: View {
       Text(title)
         .font(.system(size: 24, weight: .semibold, design: .serif))
 
-      TextField("快照名称", text: $name)
+      TextField(namePlaceholder, text: $name)
         .textFieldStyle(.roundedBorder)
         .focused($nameFocused)
         .onSubmit(confirm)
 
-      Text("保存只复制本地索引，不会关闭、移动或修改 Chrome 标签。")
+      Text("保存只复制本地索引，不会关闭、移动或修改浏览器中的标签。")
         .font(.system(size: 11))
         .foregroundStyle(.secondary)
 

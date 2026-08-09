@@ -19,13 +19,15 @@
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.5.0</string>
+  <string>0.6.0</string>
   <key>CFBundleVersion</key>
-  <string>6</string>
+  <string>7</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>页匣只在你点击时读取 Safari 当前窗口的网页标题、网址和顺序，用于保存本地合集。</string>
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © 2026 zaynzhu</string>
   <key>NSPrincipalClass</key>

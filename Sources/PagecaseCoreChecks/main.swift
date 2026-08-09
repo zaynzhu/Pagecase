@@ -74,8 +74,8 @@ func runChecks() throws -> Int {
     containing: "demo-snapshot-development-group-early",
     in: snapshots
   )
-  passed += try check(snapshots.count == 4, "版本序列演示快照数量不正确")
-  passed += try check(libraryItems.count == 3, "标签组版本没有收纳为一个资料库条目")
+  passed += try check(snapshots.count == 5, "跨浏览器演示快照数量不正确")
+  passed += try check(libraryItems.count == 4, "标签组版本没有收纳为一个资料库条目")
   passed += try check(developmentSeries?.title == "开发", "标签组版本序列标题错误")
   passed += try check(
     developmentSeries?.snapshots.map(\.id) == [
@@ -94,8 +94,44 @@ func runChecks() throws -> Int {
         return true
       }
       return false
+    }.count == 3,
+    "独立快照或 Safari 合集被错误归入版本序列"
+  )
+  guard let safariSnapshot = snapshots.first(where: { $0.sourceKind == .safari }) else {
+    throw CheckFailure.failed("演示数据缺少 Safari 合集")
+  }
+  passed += try check(
+    safariSnapshot.scope == .collection
+      && safariSnapshot.sourceId == SafariCollectionBuilder.sourceId
+      && safariSnapshot.sourceLabel == SafariCollectionBuilder.sourceLabel,
+    "Safari 合集来源信息不完整"
+  )
+  passed += try check(
+    snapshots.filter { $0.sourceKind == .chrome }.count == 4
+      && snapshots.filter { $0.sourceKind == .safari }.count == 1,
+    "Chrome 快照与 Safari 合集没有保持独立来源"
+  )
+  passed += try check(
+    safariSnapshot.windows.count == 1
+      && safariSnapshot.windows[0].groups.isEmpty
+      && safariSnapshot.tabCount == 4,
+    "Safari 合集没有只保存当前窗口网页"
+  )
+  passed += try check(
+    safariSnapshot.windows[0].ungroupedTabs.filter {
+      $0.url == "https://example.com/safari-reading"
     }.count == 2,
-    "完整现场快照被错误归入版本序列"
+    "Safari 合集中的重复网址被意外合并"
+  )
+  let safariResults = SearchEngine.search(
+    query: "WebKit",
+    liveStates: [],
+    snapshots: [safariSnapshot]
+  )
+  passed += try check(
+    safariResults.first?.sourceKind == .safari
+      && safariResults.first?.sourceLabel == SafariCollectionBuilder.sourceLabel,
+    "Safari 搜索结果缺少明确浏览器来源"
   )
   guard let series = developmentSeries,
         let seriesWindow = series.latestSnapshot.windows.first,
@@ -269,6 +305,21 @@ func runChecks() throws -> Int {
     ).uncoveredPageCount == firstState.tabCount,
     "其他来源的快照被误认为可用覆盖"
   )
+  let safariImpostor = SavedSnapshot(
+    id: "safari-impostor-coverage",
+    name: "不应覆盖 Chrome",
+    sourceId: firstState.source.id,
+    sourceKind: .safari,
+    sourceLabel: "Safari",
+    windows: firstState.windows
+  )
+  passed += try check(
+    SnapshotCoverageEvaluator.evaluate(
+      liveState: firstState,
+      snapshots: [safariImpostor]
+    ).snapshot == nil,
+    "Safari 内容被错误用于 Chrome 保存覆盖"
+  )
 
   passed += try check(
     SearchEngine.search(query: "Prisma", liveStates: states, snapshots: []).first?.title
@@ -339,14 +390,18 @@ func runChecks() throws -> Int {
     throw CheckFailure.failed("旧快照兼容夹具生成失败")
   }
   legacyObject.removeValue(forKey: "scope")
+  legacyObject.removeValue(forKey: "sourceKind")
+  legacyObject.removeValue(forKey: "sourceLabel")
   let legacyData = try JSONSerialization.data(withJSONObject: legacyObject)
   let legacySnapshot = try PagecaseJSON.makeDecoder().decode(
     SavedSnapshot.self,
     from: legacyData
   )
   passed += try check(
-    legacySnapshot.scope == .fullState,
-    "旧快照未默认识别为完整现场"
+    legacySnapshot.scope == .fullState
+      && legacySnapshot.sourceKind == .chrome
+      && legacySnapshot.sourceLabel == "Chrome",
+    "旧快照未默认识别为 Chrome 完整现场"
   )
 
   passed += try withTemporaryPaths { paths in
@@ -398,6 +453,68 @@ func runChecks() throws -> Int {
         && repository.loadSnapshots().count == 2,
       "标签组快照导入冲突后没有保留范围"
     )
+    return localPassed
+  }
+
+  passed += try withTemporaryPaths { paths in
+    var localPassed = 0
+    let repository = try SnapshotRepository(paths: paths)
+    let capture = DemoData.safariCapture(referenceDate: referenceDate)
+    let collection = try repository.createSafariCollection(
+      from: capture,
+      name: "  Safari 阅读  "
+    )
+    localPassed += try check(
+      collection.name == "Safari 阅读"
+        && collection.sourceKind == .safari
+        && collection.scope == .collection,
+      "Safari 合集构建结果错误"
+    )
+    localPassed += try check(
+      try repository.loadSnapshots().first == collection,
+      "Safari 合集落盘核对失败"
+    )
+
+    let invalidCollection = SavedSnapshot(
+      id: "invalid-chrome-collection",
+      name: "错误合集",
+      sourceId: firstState.source.id,
+      scope: .collection,
+      windows: [
+        BrowserWindow(
+          id: 1,
+          order: 0,
+          focused: true,
+          groups: [],
+          ungroupedTabs: [
+            PageItem(
+              id: 1,
+              windowId: 1,
+              groupId: nil,
+              index: 0,
+              title: "网页",
+              url: "https://example.com"
+            )
+          ]
+        )
+      ]
+    )
+    do {
+      try PagecaseValidator.validate(invalidCollection)
+      throw CheckFailure.failed("Chrome 内容被错误接受为 Safari 合集")
+    } catch is StoreError {
+      localPassed += 1
+    }
+
+    do {
+      _ = try SafariCollectionBuilder.makeSnapshot(
+        from: SafariCapture(capturedAt: referenceDate, pages: []),
+        name: "空合集"
+      )
+      throw CheckFailure.failed("空 Safari 合集未被拒绝")
+    } catch is StoreError {
+      localPassed += 1
+    }
     return localPassed
   }
 

@@ -39,6 +39,48 @@ enum Palette {
   }
 }
 
+extension BrowserKind {
+  var displayName: String {
+    switch self {
+    case .chrome:
+      return "Chrome"
+    case .safari:
+      return "Safari"
+    }
+  }
+
+  var symbol: String {
+    switch self {
+    case .chrome:
+      return "circle.grid.2x2.fill"
+    case .safari:
+      return "safari"
+    }
+  }
+
+  var accentColor: Color {
+    switch self {
+    case .chrome:
+      return Color(red: 0.24, green: 0.48, blue: 0.66)
+    case .safari:
+      return Color(red: 0.43, green: 0.38, blue: 0.62)
+    }
+  }
+
+  func tint(_ colorScheme: ColorScheme) -> Color {
+    switch (self, colorScheme) {
+    case (.chrome, .dark):
+      return Color(red: 0.13, green: 0.20, blue: 0.25)
+    case (.chrome, _):
+      return Color(red: 0.88, green: 0.94, blue: 0.98)
+    case (.safari, .dark):
+      return Color(red: 0.20, green: 0.18, blue: 0.27)
+    case (.safari, _):
+      return Color(red: 0.94, green: 0.92, blue: 0.97)
+    }
+  }
+}
+
 extension ChromeGroupColor {
   var displayColor: Color {
     switch self {

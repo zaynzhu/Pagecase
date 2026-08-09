@@ -18,22 +18,24 @@ Let pages leave memory, not your reach.
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.5.0-2F3437?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.6.0-2F3437?style=flat-square)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-787774?style=flat-square&logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-6-D97757?style=flat-square&logo=swift&logoColor=white)
 
 </div>
 
 > [!TIP]
-> Pagecase is a local web library designed for low-memory Macs. It preserves the windows, tab groups, page order, and duplicate URLs already organized in Chrome, so you can close inactive pages yourself after confirming a snapshot and later search for one page or restore a complete group.
+> Pagecase is a local web library for low-memory Macs. It mirrors Chrome into immutable snapshots and captures the front Safari window into a collection only when requested. Browser sources remain visually and structurally separate while sharing one search entry point.
 
-![Pagecase light interface](artifacts/qa-light.png)
+![Clearly separated Chrome and Safari sections](artifacts/qa-browser-separation.png)
 
 ---
 
 ## ✨ Features
 
 - **Live Chrome mirror** — Shows regular windows, native tab groups, ungrouped pages, and their original order without reading page content.
+- **On-demand Safari capture** — Reads the front Safari window only after a click, previews it, and saves a local collection without a Safari extension, full Xcode, or background monitoring.
+- **Explicit browser separation** — Sidebar sections, libraries, counts, icons, and actions distinguish Chrome from Safari; mixed search results still identify their browser.
 - **Full-state or group snapshots** — Save the complete Chrome state or one tab group; neither is overwritten by later Chrome changes.
 - **Safe-to-close status** — Shows snapshot coverage for the complete live state and each tab group, including the number of newly unsaved pages.
 - **Fast page and group retrieval** — Searches titles, domains, full URLs, tab groups, and snapshot names; groups appear as first-class results that can be viewed or explicitly restored from snapshots.
@@ -47,13 +49,23 @@ Let pages leave memory, not your reach.
 
 ## 🚀 Core Workflow
 
-Pagecase solves the fear of losing pages after closing them. It does not clean up Chrome automatically:
+Pagecase solves the fear of losing pages after closing them. It never cleans up a browser automatically.
+
+For Chrome:
 
 1. In “Live,” save the complete state or just the tab group you plan to close.
 2. Return to Chrome and close inactive pages or groups yourself to release memory.
 3. Later, search for one page or restore a complete tab group from a snapshot.
 
 Before restoring a group, Pagecase shows its name and the number of pages that will open. The connector groups only the tabs created by that restore command and never adds an existing tab to the new group.
+
+For Safari:
+
+1. Open the native Safari tab group you want to collect and bring its window to the front.
+2. Open “Safari · 按需收纳” in Pagecase, read the current window once, review it, and name the collection.
+3. After confirming the collection is searchable and openable, close the original Safari group yourself.
+
+The capture stops immediately after reading. Safari automation does not reliably expose the native tab-group name, so Pagecase asks you to name the local collection.
 
 ---
 
@@ -62,7 +74,7 @@ Before restoring a group, Pagecase shows its name and the number of pages that w
 ### Requirements
 
 - macOS 14 or later
-- Google Chrome
+- Google Chrome; system Safari when using Safari collections
 - Swift 6 and Apple Command Line Tools
 - Node.js 22, required only for extension tests
 
@@ -75,7 +87,7 @@ cd Pagecase
 open "dist/页匣.app"
 ```
 
-The build script creates an ad-hoc signed `dist/页匣.app` and bundles both the Chrome connector and `PagecaseBridge`.
+The build script creates an ad-hoc signed `dist/页匣.app` and bundles both the Chrome connector and `PagecaseBridge`. Building and on-demand Safari capture do not require full Xcode.
 
 ### Connect Chrome for the first time
 
@@ -118,6 +130,17 @@ After the same Chrome tab group is saved repeatedly, the snapshot sidebar collec
 
 ![Tab group version series](artifacts/qa-snapshot-series.png)
 
+### Collect the current Safari window
+
+1. Switch Safari to the target native tab group or window.
+2. Open the Safari section in Pagecase, choose “按需收纳,” then “读取当前窗口.”
+3. Review page order, duplicate URLs, the active page, and skipped non-Web pages, then save and name the collection.
+4. Browse, delete, open one page, or confirm the page count before opening the complete collection in Safari.
+
+![On-demand Safari capture](artifacts/qa-safari-import.png)
+
+A Safari collection is never presented as a Chrome snapshot and never modifies Safari. macOS may request Automation permission on the first real capture; denying it does not affect Chrome features.
+
 ### Search for and retrieve a page or group
 
 Press `⌘K` and search by title, domain, URL, tab group, or snapshot name:
@@ -139,7 +162,7 @@ Press `⌘K` and search by title, domain, URL, tab group, or snapshot name:
 ## 🔒 Safety Boundaries
 
 > [!IMPORTANT]
-> Pagecase never closes, moves, discards, ungroups, or regroups any existing Chrome tab automatically. The user always performs the closing action that releases memory.
+> Pagecase never closes, moves, discards, ungroups, or regroups any existing Chrome or Safari tab automatically. The user always performs the closing action that releases memory.
 
 Pagecase explicitly does not:
 
@@ -148,6 +171,7 @@ Pagecase explicitly does not:
 - Sign in, access the network, upload telemetry, or provide accounts, cloud sync, or team collaboration.
 - Use Chrome APIs that close, move, discard, or ungroup tabs.
 - Restore complete windows or modify an existing tab group.
+- Monitor Safari in the background, read Safari's native tab-group name, execute page JavaScript, or read page content.
 
 Every action that changes visible Chrome state starts with a single user click, and group restoration additionally confirms the page count. See the [product specification](docs/PRODUCT.md) and [restore-group architecture decision](docs/adr/0002-restore-groups-with-new-tabs-only.md) for the complete boundary.
 
@@ -161,13 +185,15 @@ flowchart LR
     Connector -->|"Native Messaging"| Bridge["PagecaseBridge"]
     Bridge --> JSON["Versioned local JSON"]
     App["PagecaseApp"] --> JSON
+    Safari -->|"One read after a click"| App
+    App -->|"Save after confirmation"| JSON
     App --> Commands["Explicit commands"]
     Commands --> Bridge
 ```
 
 | Component | Responsibility |
 |---|---|
-| `PagecaseApp` | Native SwiftUI/AppKit interface, search, snapshots, settings, and menu bar entry |
+| `PagecaseApp` | Native SwiftUI/AppKit interface, search, snapshots, on-demand Safari capture, settings, and menu bar entry |
 | `PagecaseCore` | Data models, validation, atomic JSON storage, coverage evaluation, and command models |
 | `PagecaseBridge` | Chrome Native Messaging protocol, live-state persistence, and command forwarding |
 | `extension/` | Queries regular Chrome windows and tab groups and executes strictly allowlisted commands |
@@ -188,7 +214,7 @@ Production data is stored by default in:
 └── ChromeExtension/
 ```
 
-Snapshots and exported files contain full URLs that may include sensitive query parameters. Treat copied or shared JSON files as browsing data.
+Chrome snapshots and Safari collections share the `snapshots/` directory, while every JSON file persists its browser kind and source label so the app can keep them separate. Files contain full URLs that may include sensitive query parameters; treat copies and exports as browsing data.
 
 ---
 
@@ -212,10 +238,11 @@ npm run check:extension
 npm run test:extension
 npm run test:bridge
 ./scripts/validate-extension.sh
+npm run check:safari
 ./scripts/build-app.sh
 ```
 
-Pagecase 0.5.0 has passed 67 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, the dangerous-extension-API scan, Release builds, visual acceptance, and the 500-page performance run.
+Pagecase 0.6.0 has passed 77 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run.
 
 > [!NOTE]
 > A Command Line Tools-only environment cannot enumerate Swift Testing tests correctly. `swift test` still compiles the test package, while `PagecaseCoreChecks` executes the same critical behavior checks.

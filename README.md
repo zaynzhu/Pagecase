@@ -18,22 +18,24 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.5.0-2F3437?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.6.0-2F3437?style=flat-square)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-787774?style=flat-square&logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-6-D97757?style=flat-square&logo=swift&logoColor=white)
 
 </div>
 
 > [!TIP]
-> 页匣是一款为低内存 Mac 设计的本地网页资料库。它保留 Chrome 原有的窗口、标签组、网页顺序和重复网址，让你在确认快照安全后自行关闭不常用页面，需要时再搜索单页或恢复完整分组。
+> 页匣是一款为低内存 Mac 设计的本地网页资料库。Chrome 现场可以实时镜像并保存快照；Safari 当前窗口可以在需要时一次性收纳成合集。两种浏览器在界面与数据中明确分开，需要时再统一搜索。
 
-![页匣浅色界面](artifacts/qa-light.png)
+![Chrome 与 Safari 清晰分区](artifacts/qa-browser-separation.png)
 
 ---
 
 ## ✨ 核心能力
 
 - **实时镜像 Chrome** — 展示普通窗口、原生标签组、未分组网页和原有顺序，不读取网页正文。
+- **按需收纳 Safari** — 只在点击时读取 Safari 最前方窗口，核对后保存为本地合集；无需 Safari 扩展、完整 Xcode 或后台监测。
+- **浏览器明确分区** — 侧栏、资料库、数量、图标与动作都区分 Chrome 和 Safari；搜索混排时仍显示清楚来源。
 - **按现场或分组保存** — 可以保存完整 Chrome 现场，也可以只保存一个标签组；两者写入后都不会被后续变化改写。
 - **判断是否放心关闭** — 实时显示完整现场和每个标签组的保存覆盖状态，新增网页会标出未保存数量。
 - **快速找回网页与分组** — 搜索标题、域名、完整网址、标签组和快照名称；标签组作为独立结果，可直接查看或从快照确认恢复。
@@ -47,13 +49,23 @@
 
 ## 🚀 核心流程
 
-页匣解决的是“关闭后还能不能找回来”，不会替你自动清理 Chrome：
+页匣解决的是“关闭后还能不能找回来”，不会替你自动清理浏览器。
+
+Chrome：
 
 1. 在“现在”页面保存完整现场，或直接保存准备关闭的标签组。
 2. 回到 Chrome，由你自己关闭暂时不用的页面或标签组，释放内存。
 3. 以后通过搜索打开一个网页，或从快照恢复整个标签组。
 
 恢复整组前，页匣会显示组名和即将打开的网页数量。连接器只组合本次恢复命令新建的标签，不会把任何已有标签加入新组。
+
+Safari：
+
+1. 在 Safari 打开准备收纳的原生标签组，让它位于最前方。
+2. 在页匣进入“Safari · 按需收纳”，点击“读取当前窗口”，核对预览后命名保存。
+3. 确认可搜索、可打开后，由你自己关闭 Safari 原标签组。
+
+Safari 读取完成即停止，不会持续监听。由于系统自动化接口无法可靠提供原生标签组名称，合集名称由你在页匣中填写。
 
 ---
 
@@ -62,7 +74,7 @@
 ### 系统要求
 
 - macOS 14 或更高版本
-- Google Chrome
+- Google Chrome；使用 Safari 合集时需要系统自带 Safari
 - Swift 6 与 Apple Command Line Tools
 - Node.js 22，仅在运行扩展测试时需要
 
@@ -75,7 +87,7 @@ cd Pagecase
 open "dist/页匣.app"
 ```
 
-构建脚本会生成经过 ad-hoc 签名的 `dist/页匣.app`，并把 Chrome 连接器与 `PagecaseBridge` 一同打包。
+构建脚本会生成经过 ad-hoc 签名的 `dist/页匣.app`，并把 Chrome 连接器与 `PagecaseBridge` 一同打包。构建与 Safari 按需收纳都不需要完整 Xcode。
 
 ### 首次连接 Chrome
 
@@ -118,6 +130,17 @@ open "dist/页匣.app"
 
 ![标签组版本序列](artifacts/qa-snapshot-series.png)
 
+### 收纳 Safari 当前窗口
+
+1. 先在 Safari 切换到目标标签组或窗口。
+2. 在侧栏的 Safari 区域点击“按需收纳”，再点击“读取当前窗口”。
+3. 核对页面顺序、重复网址、当前页和跳过数量，点击“保存为合集”并命名。
+4. 在 Safari“合集”中浏览、删除、打开单页，或确认数量后“在 Safari 打开全部”。
+
+![Safari 按需收纳](artifacts/qa-safari-import.png)
+
+Safari 合集不会假装是 Chrome 快照，也不会反向修改 Safari。系统首次读取时可能询问自动化权限；拒绝权限不会影响 Chrome 功能。
+
 ### 搜索并找回网页或标签组
 
 按 `⌘K` 输入标题、域名、网址、标签组或快照名称：
@@ -139,7 +162,7 @@ open "dist/页匣.app"
 ## 🔒 安全边界
 
 > [!IMPORTANT]
-> 页匣不会自动关闭、移动、挂起、解除分组或重新分组任何已有 Chrome 标签。真正释放内存的关闭操作始终由用户本人完成。
+> 页匣不会自动关闭、移动、挂起、解除分组或重新分组任何已有 Chrome 或 Safari 标签。真正释放内存的关闭操作始终由用户本人完成。
 
 页匣明确不做以下事情：
 
@@ -148,6 +171,7 @@ open "dist/页匣.app"
 - 不登录、不联网、不上传遥测，也不提供账号、云同步或团队协作。
 - 不使用 Chrome 标签关闭、移动、挂起或解除分组 API。
 - 不自动恢复窗口，不修改任何已有标签组。
+- 不后台监测 Safari，不读取 Safari 原生标签组名称，也不执行网页脚本或读取网页正文。
 
 所有会改变 Chrome 可见状态的操作都来自用户单次点击；恢复整组还需要额外确认网页数量。详细边界见 [产品设计](docs/PRODUCT.md) 与 [架构决策](docs/adr/0002-restore-groups-with-new-tabs-only.md)。
 
@@ -161,13 +185,15 @@ flowchart LR
     Connector -->|"Native Messaging"| Bridge["PagecaseBridge"]
     Bridge --> JSON["Versioned local JSON"]
     App["PagecaseApp"] --> JSON
+    Safari -->|"点击后读取一次"| App
+    App -->|"确认后保存合集"| JSON
     App --> Commands["Explicit commands"]
     Commands --> Bridge
 ```
 
 | 组件 | 职责 |
 |---|---|
-| `PagecaseApp` | SwiftUI/AppKit 原生界面、搜索、快照、设置与菜单栏入口 |
+| `PagecaseApp` | SwiftUI/AppKit 原生界面、搜索、快照、Safari 按需捕获、设置与菜单栏入口 |
 | `PagecaseCore` | 数据模型、校验、原子 JSON 存储、覆盖判断与命令模型 |
 | `PagecaseBridge` | Chrome Native Messaging 协议、实时现场落盘与命令转发 |
 | `extension/` | 查询普通 Chrome 窗口和标签组，执行严格白名单命令 |
@@ -188,7 +214,7 @@ flowchart LR
 └── ChromeExtension/
 ```
 
-快照和导出文件包含完整网址，其中可能带有敏感查询参数。备份或分享 JSON 前，请将其按浏览数据妥善保管。
+Chrome 快照与 Safari 合集共同存放在 `snapshots/`，每份 JSON 都持久保存浏览器种类与来源名称；应用会按来源分区。文件包含完整网址，其中可能带有敏感查询参数，备份或分享前请按浏览数据妥善保管。
 
 ---
 
@@ -212,10 +238,11 @@ npm run check:extension
 npm run test:extension
 npm run test:bridge
 ./scripts/validate-extension.sh
+npm run check:safari
 ./scripts/build-app.sh
 ```
 
-当前 0.5.0 版本已通过 67 项 Swift 核心行为检查、10 项扩展测试、Bridge 协议往返、扩展危险 API 扫描、Release 构建、视觉验收和 500 页性能验收。
+当前 0.6.0 版本已通过 77 项 Swift 核心行为检查、10 项扩展测试、Bridge 协议往返、Chrome 扩展与 Safari 捕获静态安全检查、Release 构建、浅深色视觉验收和 500 页性能验收。
 
 > [!NOTE]
 > 仅安装 Command Line Tools 的环境无法正常枚举 Swift Testing 测试；`swift test` 仍负责编译测试包，`PagecaseCoreChecks` 会实际执行同一组关键行为检查。

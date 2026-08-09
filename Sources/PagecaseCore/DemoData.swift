@@ -38,6 +38,7 @@ public enum DemoData {
         name: "开发 · 最近保存",
         createdAt: referenceDate.addingTimeInterval(-3_600),
         sourceId: states[0].source.id,
+        sourceLabel: states[0].source.label,
         scope: .group,
         windows: [
           BrowserWindow(
@@ -54,13 +55,16 @@ public enum DemoData {
         name: "七月的工具研究",
         createdAt: referenceDate.addingTimeInterval(-86_400 * 4),
         sourceId: states[0].source.id,
+        sourceLabel: states[0].source.label,
         windows: states[0].windows
       ),
+      safariCollectionSnapshot(referenceDate: referenceDate),
       SavedSnapshot(
         id: "demo-snapshot-development-group-early",
         name: "开发 · 较早版本",
         createdAt: referenceDate.addingTimeInterval(-86_400 * 7),
         sourceId: states[0].source.id,
+        sourceLabel: states[0].source.label,
         scope: .group,
         windows: [
           BrowserWindow(
@@ -77,9 +81,40 @@ public enum DemoData {
         name: "云南路线资料",
         createdAt: referenceDate.addingTimeInterval(-86_400 * 12),
         sourceId: states[1].source.id,
+        sourceLabel: states[1].source.label,
         windows: states[1].windows
       )
     ]
+  }
+
+  public static func safariCapture(referenceDate: Date = Date()) -> SafariCapture {
+    SafariCapture(
+      capturedAt: referenceDate,
+      pages: [
+        SafariCapturedPage(
+          title: "WebKit 发布说明",
+          url: "https://webkit.org/blog/",
+          index: 0,
+          active: true
+        ),
+        SafariCapturedPage(
+          title: "Apple 设计资源",
+          url: "https://developer.apple.com/design/resources/",
+          index: 1
+        ),
+        SafariCapturedPage(
+          title: "稍后阅读的长文",
+          url: "https://example.com/safari-reading",
+          index: 2
+        ),
+        SafariCapturedPage(
+          title: "同一网址的另一份语境",
+          url: "https://example.com/safari-reading",
+          index: 3
+        )
+      ],
+      skippedPageCount: 1
+    )
   }
 
   public static func performanceState(tabCount: Int = 500, referenceDate: Date = Date()) -> LiveState {
@@ -230,6 +265,37 @@ public enum DemoData {
     return LiveState(
       source: BrowserSource(id: sourceId, label: label, capturedAt: capturedAt),
       windows: windows
+    )
+  }
+
+  private static func safariCollectionSnapshot(referenceDate: Date) -> SavedSnapshot {
+    let capture = safariCapture(referenceDate: referenceDate.addingTimeInterval(-86_400 * 2))
+    let window = BrowserWindow(
+      id: 1,
+      order: 0,
+      focused: true,
+      groups: [],
+      ungroupedTabs: capture.pages.enumerated().map { offset, page in
+        PageItem(
+          id: offset + 1,
+          windowId: 1,
+          groupId: nil,
+          index: page.index,
+          title: page.title,
+          url: page.url,
+          active: page.active
+        )
+      }
+    )
+    return SavedSnapshot(
+      id: "demo-safari-reading-collection",
+      name: "周末阅读合集",
+      createdAt: capture.capturedAt,
+      sourceId: SafariCollectionBuilder.sourceId,
+      sourceKind: .safari,
+      sourceLabel: SafariCollectionBuilder.sourceLabel,
+      scope: .collection,
+      windows: [window]
     )
   }
 }

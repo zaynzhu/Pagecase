@@ -18,6 +18,7 @@ public struct SearchResult: Identifiable, Equatable, Sendable {
   public let url: String?
   public let domain: String?
   public let sourceId: String
+  public let sourceKind: BrowserKind
   public let sourceLabel: String
   public let context: String
   public let capturedAt: Date
@@ -35,6 +36,7 @@ public struct SearchResult: Identifiable, Equatable, Sendable {
     url: String?,
     domain: String?,
     sourceId: String,
+    sourceKind: BrowserKind,
     sourceLabel: String,
     context: String,
     capturedAt: Date,
@@ -51,6 +53,7 @@ public struct SearchResult: Identifiable, Equatable, Sendable {
     self.url = url
     self.domain = domain
     self.sourceId = sourceId
+    self.sourceKind = sourceKind
     self.sourceLabel = sourceLabel
     self.context = context
     self.capturedAt = capturedAt
@@ -81,6 +84,7 @@ public enum SearchEngine {
       appendItems(
         windows: state.windows,
         sourceId: state.source.id,
+        sourceKind: state.source.kind,
         sourceLabel: sourceLabel,
         containerId: "live",
         containerName: nil,
@@ -92,10 +96,11 @@ public enum SearchEngine {
     }
 
     for snapshot in snapshots {
-      let sourceLabel = sourceLabels[snapshot.sourceId] ?? "Chrome"
+      let sourceLabel = sourceLabels[snapshot.sourceId] ?? snapshot.sourceLabel
       appendItems(
         windows: snapshot.windows,
         sourceId: snapshot.sourceId,
+        sourceKind: snapshot.sourceKind,
         sourceLabel: sourceLabel,
         containerId: snapshot.id,
         containerName: snapshot.name,
@@ -120,6 +125,7 @@ public enum SearchEngine {
   private static func appendItems(
     windows: [BrowserWindow],
     sourceId: String,
+    sourceKind: BrowserKind,
     sourceLabel: String,
     containerId: String,
     containerName: String?,
@@ -134,6 +140,7 @@ public enum SearchEngine {
           group: group,
           window: window,
           sourceId: sourceId,
+          sourceKind: sourceKind,
           sourceLabel: sourceLabel,
           containerId: containerId,
           containerName: containerName,
@@ -149,6 +156,7 @@ public enum SearchEngine {
             groupName: group.displayTitle,
             windowOrder: window.order,
             sourceId: sourceId,
+            sourceKind: sourceKind,
             sourceLabel: sourceLabel,
             containerId: containerId,
             containerName: containerName,
@@ -166,6 +174,7 @@ public enum SearchEngine {
           groupName: "未分组",
           windowOrder: window.order,
           sourceId: sourceId,
+          sourceKind: sourceKind,
           sourceLabel: sourceLabel,
           containerId: containerId,
           containerName: containerName,
@@ -182,6 +191,7 @@ public enum SearchEngine {
     group: TabGroup,
     window: BrowserWindow,
     sourceId: String,
+    sourceKind: BrowserKind,
     sourceLabel: String,
     containerId: String,
     containerName: String?,
@@ -212,6 +222,7 @@ public enum SearchEngine {
       url: nil,
       domain: nil,
       sourceId: sourceId,
+      sourceKind: sourceKind,
       sourceLabel: sourceLabel,
       context: contextParts.joined(separator: " › "),
       capturedAt: capturedAt,
@@ -229,6 +240,7 @@ public enum SearchEngine {
     groupName: String,
     windowOrder: Int,
     sourceId: String,
+    sourceKind: BrowserKind,
     sourceLabel: String,
     containerId: String,
     containerName: String?,
@@ -258,6 +270,7 @@ public enum SearchEngine {
       url: page.url,
       domain: page.domain,
       sourceId: sourceId,
+      sourceKind: sourceKind,
       sourceLabel: sourceLabel,
       context: contextParts.joined(separator: " › "),
       capturedAt: capturedAt,

@@ -1,4 +1,4 @@
-# 页匣 · Pagecase 0.5 验证结果
+# 页匣 · Pagecase 0.6 验证结果
 
 验证日期：2026-08-09
 
@@ -8,9 +8,9 @@
 
 ## 结论
 
-0.5 版本在纯演示数据下完成标签组版本序列、旧版本定位与安全删除回落，并重新完成搜索、安全、功能、视觉、打包与性能验证。整个自动化过程没有加载 Chrome 扩展、没有注册真实 Native Messaging Host，也没有操作用户当前的 Chrome 标签。
+0.6 完成 Safari 按需收纳、Safari 合集、持久化浏览器来源，以及 Chrome／Safari 明确分区。Safari 只在用户点击时读取最前方窗口，预览确认后保存；没有插件、后台轮询或常驻辅助进程。Chrome 的实时镜像、快照覆盖和安全恢复边界保持不变。
 
-用户已在验收之外手动完成首次连接并确认实时现场正常显示；真实 Chrome 中的定位、单页打开和整组恢复仍不计入自动化验证结论。
+自动化、视觉和性能验收全部使用独立应用标识、临时数据目录与模拟浏览器数据。没有加载扩展、注册真实 Native Messaging Host、触发 Apple Events 权限，也没有读取或操作用户当前的 Chrome、Safari 和现有 `dist/页匣.app`。
 
 ## 自动化结果
 
@@ -18,137 +18,110 @@
 |---|---|
 | `swift build` | 通过 |
 | `swift test --enable-swift-testing --disable-xctest` | 测试包构建通过 |
-| `swift run PagecaseCoreChecks` | 67 项通过 |
-| 扩展语法检查 | 通过 |
-| 扩展 Node 测试 | 10 项通过 |
-| 扩展危险 API 与整组恢复边界扫描 | 通过 |
-| 扩展外部网络调用扫描 | 零命中 |
+| `swift run PagecaseCoreChecks` | 77 项通过 |
+| Chrome 扩展语法检查 | 通过 |
+| Chrome 扩展 Node 测试 | 10 项通过 |
+| Chrome 危险 API、分组恢复与网络扫描 | 通过，禁止项零命中 |
+| Safari 按需读取静态安全检查 | 通过 |
+| Safari AppleScript 只编译检查 | `osacompile` 通过，未执行脚本 |
 | Bridge 快照落盘与 ping 往返 | 通过 |
-| Release `.app` 构建 | 通过 |
-| ad-hoc 签名严格验证 | 通过 |
-| 应用版本与构建号 | `0.5.0` / `6` |
-| Native Host 清单隔离安装与卸载 | 通过 |
-| 应用内扩展准备与 Host 配置 | 隔离目录往返通过 |
-| `.app` 内置扩展文件 | 5 项齐全并签名通过 |
+| Release Swift 构建 | 通过 |
+| 隔离 Release `.app` ad-hoc 签名 | 严格验证通过 |
+| 应用版本与构建号 | `0.6.0` / `7` |
+| `NSAppleEventsUsageDescription` | 已包含并核对 |
+| `.app` 内置 Chrome 扩展文件 | 5 项齐全 |
+| 隔离 Release 应用体积 | 4.4MB |
 
-当前机器没有完整 Xcode，Command Line Tools 的 Swift Testing 运行器不能正常枚举测试。项目因此同时保留标准 `Tests/PagecaseCoreTests`，并用可执行的 `PagecaseCoreChecks` 在本机实际运行同一组关键行为检查，避免把“测试包编译成功”误报为“测试已执行”。
+当前机器没有完整 Xcode。Command Line Tools 的 Swift Testing 运行器不能正常枚举测试，因此 `swift test` 用于编译标准测试包，`PagecaseCoreChecks` 在本机实际执行同一组关键行为检查。页匣的构建、运行和 Safari 按需收纳均不依赖完整 Xcode。
+
+## 数据与行为结果
+
+新增检查覆盖：
+
+- Safari 合集持久保存 `sourceKind = safari`、来源名称和 `scope = collection`。
+- 合集恰好包含一个窗口、零个标签组和至少一个 Web 页面。
+- 页面顺序、重复网址和当前页保持不变，非 `http/https` 项不会进入合集。
+- 空名称、空捕获和伪装成 Chrome 的合集会被拒绝。
+- 旧版 JSON 缺少浏览器来源字段时继续按 Chrome 解码。
+- Chrome 与 Safari 不互相参与快照覆盖判断。
+- Safari 合集不会进入 Chrome 标签组版本序列。
+- 仓库保存后重新从磁盘读取，来源与内容核对一致。
+- 全局搜索同时返回 Chrome 与 Safari 内容，并保留明确浏览器来源。
+- 删除一个浏览器的记录不会把选择回落到另一浏览器资料库。
+
+演示夹具现在包含 2 个 Chrome 来源、33 个 Chrome 网页、4 个 Chrome 快照和 1 个 Safari 合集。Safari 模拟捕获包含 4 个可保存网页、1 个跳过项和 1 个重复网址；视觉保存后隔离资料库显示 2 个 Safari 合集，Chrome 快照仍保持 4 个。
 
 ## 安全结果
 
-运行时代码不存在以下能力：
+Chrome 扩展继续不存在关闭、移动、挂起、解除分组或关闭窗口 API，也没有外部网络调用。`restoreGroup` 仍只把本次命令创建的 `createdTabIds` 交给分组 API。
 
-- 关闭标签
-- 移动标签
-- 丢弃或挂起标签
-- 解除分组或修改任何已有标签组
-- 关闭 Chrome 窗口
-- 发起 `fetch`、`XMLHttpRequest`、`WebSocket` 或 `EventSource` 请求
+Safari 静态检查确认：
 
-整组恢复只在用户确认后执行：先创建后台标签，再把本次命令收集的 `createdTabIds` 交给 `tabs.group`，最后设置新组名称与颜色。静态检查限制分组写 API 的位置与参数，Node 测试确认不会混入已有标签标识。
+- 读取器没有 `Timer`、`DispatchSourceTimer`、应用启动通知或分离后台任务。
+- AppleScript 只遍历 `tabs of front window`，读取标签名称、网址和当前页状态。
+- 脚本没有 `close`、`quit`、`delete`、`move`、`activate`、`make new`、`open location`、`do JavaScript` 或修改标签属性的语句。
+- 演示模式注入 `DemoSafariCapturer`，不会执行真实 AppleScript。
+- 捕获结果只保存在内存预览中，用户命名确认后才经统一模型校验与原子 JSON 写入。
 
-扩展权限精确为：
-
-```text
-tabs
-tabGroups
-storage
-nativeMessaging
-```
-
-没有 host 权限、浏览历史、书签、下载或无痕权限。
+Safari 单页打开和“打开全部”也只由用户点击触发；演示模式会阻止这些动作进入真实 Safari。
 
 ## 视觉结果
 
-已使用实际 Release 应用检查：
+通过 Computer Use 对独立的 `com.zaynzhu.pagecase.qa06final` 演示应用完成浅色与深色验收：
 
-- `1080 × 700` 默认窗口
-- 浅色模式
-- 深色模式
-- 现在、快照、设置和搜索状态
-- 保存快照流程与成功反馈
-- 保存后磁盘内容核对反馈
-- 上下键选择、Return 执行选中项和 Escape 清空
-- 500 项搜索结果跨批次选择与自动滚动
-- 标签组名称生成独立结果，并排在通过组名命中的成员网页之前
-- 实时与快照标签组的“查看”切换到准确来源和快照、展开并滚动到目标组
-- Return 在标签组结果上只执行“查看”，不会创建恢复命令
-- 快照标签组搜索结果独立显示“恢复整组”，确认框包含组名与 3 个网页；取消后不执行命令
-- 来源过期时标签组仍可在页匣内查看，“恢复整组”显示“Chrome 未连接”并禁用
-- 导出完整网址隐私提醒
-- 三步连接准备、扩展标识校验和 Host 状态
-- 未命名标签组、折叠状态和重复网址
-- 过期实时项、离线快照项、混合搜索结果和 Return 保护
-- 侧栏来源状态与设置页“已连接 / 过期”汇总
-- 菜单栏场景、唯一主窗口、关闭后驻留与搜索焦点
-- 完整快照覆盖、未保存数量、重复网址与标签组语境
-- 新增网页后显示未覆盖，保存并经磁盘核对后立即切换为完整覆盖
-- 每个实时标签组独立显示“已保存 / N 个未保存 / 未保存”
-- 未保存、部分保存和完整保存的标签组分别显示“保存该组”“保存最新版本”和“查看快照”
-- 标签组快照只包含选中的一个组，保存后旧版本保持不变，新版本从磁盘重新核对
-- “查看快照”打开实际覆盖该组的版本，并将目标标签组滚动到可见区域
-- 快照索引与详情明确显示“完整现场”或“标签组”，完整现场状态不会采信单组快照
-- 4 份独立快照在侧栏显示为 1 个含两个版本的标签组序列和 2 个完整现场条目，快照总数仍显示为 4
-- 标签组版本序列默认折叠并打开最新版；展开后显示较早版本自己的名称、日期、2 个网页和完整详情
-- 从搜索结果定位较早版本时自动展开对应序列，当前版本在索引中保持可见
-- 删除较早版本后继续选中最新版；删除最新版后继续选中同序列的较早版本，不跳到无关快照
-- 版本序列只收纳索引条目，两个版本仍各自保留 3 页与 2 页内容，没有被合并或覆盖
-- 折叠状态写入版本化本机偏好，完全退出并重新打开后仍保持
-- 快照分组的“恢复整组”入口、网页数量确认和取消路径
-- 快照详情的可见删除按钮、快照名称与网页数量确认、取消后资料保持不变
-- 500 页性能夹具
-- 键盘与 VoiceOver 可访问名称
+- 侧栏固定分成 `CHROME` 与 `SAFARI`，分别使用浏览器图标、名称、识别色和独立数量。
+- Chrome 只显示“现在 / 快照 / 实时来源”；Safari 只显示“按需收纳 / 合集”。
+- Chrome 快照资料库不会出现 Safari 合集，Safari 合集资料库不会出现 Chrome 快照。
+- Safari 首屏清楚表达“0 常驻读取”和三步流程。
+- 模拟读取后显示 4 个网页、顺序、当前页、重复网址及 1 个跳过项。
+- 保存弹窗使用“合集名称”和浏览器中性安全说明，不再出现 Chrome 标签文案。
+- 默认名称缩短为“Safari · 日期”，保存后不会在索引和标题中异常换行。
+- Safari 合集详情使用独立来源徽章、“合集网页”和“在 Safari 打开全部”，不出现 Chrome 恢复语义。
+- 全局搜索混排时每行同时显示浏览器图标、浏览器名称和“现在 / 快照 / 合集”。
+- 深色模式保持足够对比度，没有渐变、重阴影、玻璃拟态或大面积高饱和色。
 
-验收图：
+本轮新增验收图：
 
-- [浅色模式](../artifacts/qa-light.png)
-- [深色模式](../artifacts/qa-dark.png)
-- [键盘搜索选中态](../artifacts/qa-search-keyboard.png)
-- [连接准备设置页](../artifacts/qa-connection-setup.png)
-- [过期与离线来源](../artifacts/qa-source-status.png)
-- [保存后的完整快照覆盖](../artifacts/qa-snapshot-coverage.png)
-- [分组保存状态](../artifacts/qa-group-status.png)
-- [恢复整组确认](../artifacts/qa-group-restore.png)
-- [快照删除入口](../artifacts/qa-snapshot-delete-button.png)
-- [标签组保存状态与动作](../artifacts/qa-group-save-states.png)
-- [标签组快照详情](../artifacts/qa-group-snapshot.png)
-- [标签组搜索结果](../artifacts/qa-group-search.png)
-- [深色标签组搜索结果](../artifacts/qa-group-search-dark.png)
-- [搜索结果恢复确认](../artifacts/qa-group-search-restore.png)
-- [标签组版本序列](../artifacts/qa-snapshot-series.png)
-- [深色标签组版本序列](../artifacts/qa-snapshot-series-dark.png)
+- [Chrome 与 Safari 分区](../artifacts/qa-browser-separation.png)
+- [Safari 按需收纳](../artifacts/qa-safari-import.png)
+- [Safari 合集资料库](../artifacts/qa-safari-library.png)
+- [跨浏览器搜索来源](../artifacts/qa-mixed-search.png)
+- [Safari 按需收纳深色模式](../artifacts/qa-safari-import-dark.png)
 
-界面遵循 `minimalist-ui` 转译后的原生规则：温暖单色、系统字体、1px 分隔、低饱和分组脊线、克制圆角，无渐变、重阴影、玻璃拟态或卡片墙。
+界面延续 `minimalist-ui` 的原生转译：温暖单色、清晰排版、1px 分隔、克制圆角和低饱和来源色。Safari 没有另起一套视觉系统，而是在同一资料柜语言中形成明确但安静的来源边界。
 
 ## 性能结果
 
-Release 应用载入 500 个网页项后持续空闲 60 秒，并在关闭主窗口后继续记录 45 秒菜单栏驻留值：
+隔离 Release 应用载入 500 个 Chrome 网页，空闲 60 秒后测量：
 
 | 指标 | 实测 | 门槛 |
 |---|---:|---:|
-| 应用 RSS（500 页、60 秒，诊断值） | 约 105–107MB | 相对同机基线无显著增长 |
-| 应用物理内存足迹（500 页、60 秒） | 40MB | 目标 ≤80MB，上限 ≤100MB |
-| 应用空闲 CPU（6 次稳定采样平均） | 约 0.1% | ≤1% |
-| 菜单栏驻留 RSS（关闭窗口 45 秒，诊断值） | 约 84MB | 记录 |
+| 应用物理内存足迹 | 40MB，峰值 46MB | 目标 ≤80MB，上限 ≤100MB |
+| 应用 RSS（诊断值） | 60 秒采样 38.7MB，最终 36.7MB | 相对同机基线无显著增长 |
+| 应用 CPU（7 次采样平均） | 0.5%，最终 0.1% | ≤1% |
 | 菜单栏驻留物理内存足迹 | 42MB | ≤100MB |
-| 菜单栏驻留 CPU | 约 0.2% | ≤1% |
-| Bridge 常驻内存 | 约 6.1MB | ≤25MB |
+| 菜单栏驻留 RSS（诊断值） | 37.6MB | 记录 |
+| 菜单栏驻留 CPU | 0.8% | ≤1% |
+| Bridge RSS | 6.3MB | ≤25MB |
 | Bridge 空闲 CPU | 0.0% | ≤1% |
 
-长分组首次只建立 40 行视图，长搜索首次建立 50 行视图；全部网页仍可搜索，其余内容按需分批展示。0.5 中搜索“性能测试”返回 1 个标签组与 500 个网页，共 501 项；连续向下移动 55 次后，第二批结果正常加载并自动滚动到选中项。
+500 页长分组首次只建立 40 行视图，其余按需加载。Safari 功能没有增加轮询器、数据库、WebView 或额外进程；0.6 的 500 页物理内存足迹与 0.5 的 40MB 基线相同。
 
-0.5 的 500 页物理内存足迹与 0.4 同为 40MB，RSS 诊断值略低于上一版本的约 108–111MB。由此确认版本序列没有带来可见常驻内存回归；验收继续以更能反映实际内存压力的物理内存足迹为主，并记录 RSS 作为版本对照。
+## 打包结果
 
-连接诊断每 2 秒检查一次 Host 清单和来源新鲜度，但只有状态实际变化时才发布界面更新。来源跨过 30 秒边界时只触发一次状态更新。修正后重新空闲 60 秒，最终结果保持在目标内。
-
-菜单栏与主窗口共享同一个模型，不复制 500 页数据。关闭主窗口后应用继续驻留，45 秒稳定值仍低于内存上限，且没有可见空闲 CPU 唤醒。
-
-覆盖核对在 500 页无快照场景中完成整页与分组计算并显示未保存状态；持续空闲 60 秒后仍在内存与 CPU 目标内。
+- `swift build -c release` 在 Command Line Tools 环境通过。
+- 使用 Release 二进制组装的隔离 `.app` 可启动，ad-hoc 签名通过 `codesign --verify --deep --strict`。
+- `Info.plist` 已核对 macOS 14、版本 `0.6.0`、构建号 `7` 和 Safari 自动化用途说明。
+- Chrome 连接器的 5 个运行与说明文件全部进入应用包。
+- 本轮没有运行会替换 `dist/页匣.app` 的正式打包脚本，避免影响用户当前安装；正式产物可在用户决定升级时再生成。
 
 ## 未验证项
 
-- 自动化加载真实 Chrome 扩展或注册 Native Messaging Host
-- 对真实标签执行“定位”
-- 从真实快照执行“打开”和“恢复整组”
-- Developer ID 正式签名、公证与自动更新
+- 真实 Safari 首次自动化权限提示与授权路径。
+- 从真实 Safari 最前方窗口读取标题、网址、顺序和当前页。
+- 从真实 Safari 合集打开单页或打开全部。
+- 自动化加载真实 Chrome 扩展或注册 Native Messaging Host。
+- 对真实 Chrome 标签执行定位、打开和恢复整组。
+- Developer ID 正式签名、公证与自动更新。
 
-这些项目需要用户单独授权，不影响当前演示版和静态安全结论。
+这些项目都需要用户单独授权。它们不影响当前模拟数据、模型校验、静态安全、视觉与资源占用结论。

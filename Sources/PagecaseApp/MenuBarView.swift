@@ -9,7 +9,8 @@ struct MenuBarView: View {
 
   var body: some View {
     Text(sourceSummary)
-    Text("\(model.totalLiveTabs) 个实时网页 · \(model.snapshots.count) 个快照")
+    Text("Chrome：\(model.totalLiveTabs) 个实时网页 · \(model.chromeSnapshots.count) 个快照")
+    Text("Safari：\(model.safariCollections.count) 个本地合集")
 
     Divider()
 
@@ -32,16 +33,16 @@ struct MenuBarView: View {
 
   private var sourceSummary: String {
     if model.isDemoMode {
-      return "演示模式"
+      return "Chrome 与 Safari 演示模式"
     }
     if model.connectedSourceCount > 0, model.staleSourceCount > 0 {
       return "\(model.connectedSourceCount) 个已连接 · \(model.staleSourceCount) 个过期"
     }
     if model.connectedSourceCount > 0 {
-      return "\(model.connectedSourceCount) 个来源已连接"
+      return "\(model.connectedSourceCount) 个 Chrome 来源已连接"
     }
     if model.staleSourceCount > 0 {
-      return "\(model.staleSourceCount) 个来源数据过期"
+      return "\(model.staleSourceCount) 个 Chrome 来源数据过期"
     }
     return "等待 Chrome"
   }

@@ -1,5 +1,10 @@
 import Foundation
 
+public enum BrowserKind: String, Codable, CaseIterable, Sendable {
+  case chrome
+  case safari
+}
+
 public enum ChromeGroupColor: String, Codable, CaseIterable, Sendable {
   case grey
   case blue
@@ -14,11 +19,16 @@ public enum ChromeGroupColor: String, Codable, CaseIterable, Sendable {
 
 public struct BrowserSource: Codable, Equatable, Sendable {
   public let id: String
-  public let kind: String
+  public let kind: BrowserKind
   public var label: String
   public let capturedAt: Date
 
-  public init(id: String, kind: String = "chrome", label: String, capturedAt: Date) {
+  public init(
+    id: String,
+    kind: BrowserKind = .chrome,
+    label: String,
+    capturedAt: Date
+  ) {
     self.id = id
     self.kind = kind
     self.label = label
@@ -159,6 +169,7 @@ public struct LiveState: Codable, Equatable, Sendable {
 public enum SnapshotScope: String, Codable, Equatable, Sendable {
   case fullState
   case group
+  case collection
 }
 
 public struct SavedSnapshot: Codable, Equatable, Identifiable, Sendable {
@@ -168,6 +179,8 @@ public struct SavedSnapshot: Codable, Equatable, Identifiable, Sendable {
   public let createdAt: Date
   public var updatedAt: Date
   public let sourceId: String
+  public let sourceKind: BrowserKind
+  public let sourceLabel: String
   public let scope: SnapshotScope
   public let windows: [BrowserWindow]
 
@@ -178,6 +191,8 @@ public struct SavedSnapshot: Codable, Equatable, Identifiable, Sendable {
     createdAt: Date = Date(),
     updatedAt: Date? = nil,
     sourceId: String,
+    sourceKind: BrowserKind = .chrome,
+    sourceLabel: String = "Chrome",
     scope: SnapshotScope = .fullState,
     windows: [BrowserWindow]
   ) {
@@ -187,6 +202,8 @@ public struct SavedSnapshot: Codable, Equatable, Identifiable, Sendable {
     self.createdAt = createdAt
     self.updatedAt = updatedAt ?? createdAt
     self.sourceId = sourceId
+    self.sourceKind = sourceKind
+    self.sourceLabel = sourceLabel
     self.scope = scope
     self.windows = windows
   }
@@ -198,6 +215,8 @@ public struct SavedSnapshot: Codable, Equatable, Identifiable, Sendable {
     case createdAt
     case updatedAt
     case sourceId
+    case sourceKind
+    case sourceLabel
     case scope
     case windows
   }
@@ -210,6 +229,9 @@ public struct SavedSnapshot: Codable, Equatable, Identifiable, Sendable {
     createdAt = try container.decode(Date.self, forKey: .createdAt)
     updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     sourceId = try container.decode(String.self, forKey: .sourceId)
+    sourceKind = try container.decodeIfPresent(BrowserKind.self, forKey: .sourceKind) ?? .chrome
+    sourceLabel = try container.decodeIfPresent(String.self, forKey: .sourceLabel)
+      ?? (sourceKind == .safari ? "Safari" : "Chrome")
     scope = try container.decodeIfPresent(SnapshotScope.self, forKey: .scope) ?? .fullState
     windows = try container.decode([BrowserWindow].self, forKey: .windows)
   }
@@ -222,6 +244,8 @@ public struct SavedSnapshot: Codable, Equatable, Identifiable, Sendable {
     try container.encode(createdAt, forKey: .createdAt)
     try container.encode(updatedAt, forKey: .updatedAt)
     try container.encode(sourceId, forKey: .sourceId)
+    try container.encode(sourceKind, forKey: .sourceKind)
+    try container.encode(sourceLabel, forKey: .sourceLabel)
     try container.encode(scope, forKey: .scope)
     try container.encode(windows, forKey: .windows)
   }

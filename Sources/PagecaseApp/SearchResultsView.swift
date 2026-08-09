@@ -24,7 +24,7 @@ struct SearchResultsView: View {
           .padding(.bottom, 20)
 
           if model.searchResults.isEmpty {
-            Text("没有找到匹配的网页或标签组。可以尝试标题、域名、组名或快照名称。")
+            Text("没有找到匹配内容。可以尝试网页标题、域名、Chrome 标签组、快照或 Safari 合集名称。")
               .font(.system(size: 12))
               .foregroundStyle(Palette.muted(colorScheme))
               .padding(.vertical, 30)
@@ -103,14 +103,20 @@ struct SearchResultsView: View {
     actionTitle: String
   ) -> some View {
     HStack(spacing: 14) {
-      Text(result.kind == .live ? "现在" : "快照")
-        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-        .foregroundStyle(
-          result.kind == .live
-            ? Color(red: 0.12, green: 0.38, blue: 0.58)
-            : Color(red: 0.20, green: 0.42, blue: 0.23)
-        )
-        .frame(width: 34, alignment: .leading)
+      VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 4) {
+          Image(systemName: result.sourceKind.symbol)
+            .font(.system(size: 8, weight: .semibold))
+          Text(result.sourceKind.displayName.uppercased())
+            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+        }
+        .foregroundStyle(result.sourceKind.accentColor)
+
+        Text(result.kind == .live ? "现在" : (result.sourceKind == .safari ? "合集" : "快照"))
+          .font(.system(size: 9, weight: .semibold, design: .monospaced))
+          .foregroundStyle(Palette.muted(colorScheme))
+      }
+      .frame(width: 58, alignment: .leading)
 
       VStack(alignment: .leading, spacing: 3) {
         Text(result.title)
@@ -156,7 +162,9 @@ struct SearchResultsView: View {
       .opacity(actionEnabled ? 1 : 0.62)
       .accessibilityLabel("\(result.title)，\(actionTitle)")
 
-      if result.target == .group && result.kind == .snapshot {
+      if result.target == .group,
+         result.kind == .snapshot,
+         result.sourceKind == .chrome {
         snapshotRestoreAction(result)
       }
     }

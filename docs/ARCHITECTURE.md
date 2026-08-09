@@ -1,14 +1,14 @@
-# 页匣 · Pagecase 0.5 技术设计
+# 页匣 · Pagecase 0.6 技术设计
 
 ## 1. 架构结论
 
-当前架构采用三个可独立测试的组件：
+当前架构采用三个可独立测试的组件，并把 Safari 按需捕获保持在原生应用进程内：
 
 1. `PagecaseApp`：SwiftUI/AppKit 原生 macOS 应用。
 2. `PagecaseBridge`：Swift 编写的 Chrome Native Messaging Host。
 3. `extension`：Manifest V3 Chrome 扩展。
 
-应用负责界面、搜索、快照和本地文件；扩展负责查询 Chrome 元数据和执行三种明确动作；Bridge 负责可靠地转发消息并原子落盘。
+应用负责界面、搜索、本地文件与 Safari 单次捕获；扩展负责查询 Chrome 元数据和执行三种明确动作；Bridge 负责可靠地转发 Chrome 消息并原子落盘。Safari 不需要扩展、Bridge 或后台辅助进程。
 
 不使用 Electron、WebView、本地 HTTP 服务、云端服务或第三方依赖。
 
@@ -19,6 +19,8 @@ flowchart LR
     B -->|"原子写入"| L["live/*.json"]
     A["PagecaseApp"] -->|"读取"| L
     A -->|"复制"| S["snapshots/*.json"]
+    SF["Safari 最前方窗口"] -->|"用户点击后读取一次"| A
+    A -->|"确认后保存合集"| S
     A -->|"写入单次命令"| Q["commands/*.json"]
     Q -->|"文件事件"| B
     B -->|"focusTab / openUrl / restoreGroup"| E
@@ -34,6 +36,8 @@ flowchart LR
 纯扩展可以访问标签组，但界面与数据生命周期被限制在 Chrome 内，无法提供独立菜单栏、原生全局搜索和长期本地资料库。
 
 混合方案让扩展保持极小，把长期数据和视觉复杂度放在低内存原生应用中。
+
+Safari 采用不同取舍：AppleScript 可以按需读取最前方窗口的标签标题、网址和顺序，但不提供可靠的原生标签组名称。Pagecase 因此只在用户点击时执行一次读取，让用户自行命名合集；不为追求“实时”引入 Safari 扩展、辅助功能常驻监测或完整 Xcode 工程。
 
 ## 3. 项目结构
 
@@ -70,6 +74,7 @@ pagecase/
 - macOS 14 或更高版本。
 - Swift 6，Swift Package Manager。
 - Chrome Manifest V3。
+- Safari 自动化使用系统自带 Apple Events，仅在用户点击时执行。
 - Node 22 仅用于扩展测试，不作为运行时依赖。
 - 本机没有完整 Xcode，所有必需构建命令必须在 Command Line Tools 环境可运行。
 
@@ -166,11 +171,20 @@ pagecase/
 - `name`
 - `createdAt`
 - `sourceId`
-- `scope`：`fullState` 或 `group`
+- `sourceKind`：`chrome` 或 `safari`
+- `sourceLabel`：持久保存的可读来源名称
+- `scope`：`fullState`、`group` 或 `collection`
 
 快照内容不可被实时更新覆盖。重命名只改变快照名称和 `updatedAt`，不改变其网页内容。
 
-`fullState` 保存一个来源当时的全部窗口；`group` 必须且只能包含一个窗口中的一个标签组，不能带未分组网页。`scope` 是 schema v1 的可选兼容字段：旧文件缺少该字段时按 `fullState` 解码，新写入文件始终显式保存范围。
+`fullState` 保存一个 Chrome 来源当时的全部窗口；`group` 必须且只能包含一个 Chrome 窗口中的一个标签组，不能带未分组网页。`collection` 必须来自 Safari，且只能包含一个窗口、零个标签组和至少一个未分组网页。旧文件缺少浏览器来源字段时按 Chrome 解码，新写入文件始终显式保存来源和范围。
+
+浏览器来源是数据边界，不是展示时临时推断的标签：
+
+- Chrome 快照只参与同一 Chrome 来源的保存覆盖判断。
+- 只有 Chrome 标签组快照进入版本序列。
+- Safari 合集不参与 Chrome 覆盖、恢复整组或版本收纳。
+- 全局搜索可以同时返回两类记录，但结果携带 `sourceKind`，动作由来源决定。
 
 ### 6.3 资料库导出
 
@@ -181,6 +195,17 @@ pagecase/
 - `applicationVersion`
 - `snapshots`
 - 不包含实时现场、命令、结果和本地来源连接状态
+
+### 6.4 Safari 按需捕获
+
+`SystemSafariCapturer` 实现应用内的 `SafariCapturing` 协议：
+
+1. 用户点击后先确认 Safari 正在运行。
+2. 使用 `NSAppleScript` 向 Safari 查询最前方窗口的标签数量、每页标题、网址和当前标签。
+3. 只接收 `http/https`，过滤结果记录为一个内存中的 `SafariCapture` 预览。
+4. 用户命名确认后，`SafariCollectionBuilder` 转换为 `SavedSnapshot`，经统一模型校验与原子仓库保存。
+
+捕获器不由计时器、目录监听或应用启动触发，不读取 Safari 原生标签组名称，不执行网页内 JavaScript，也没有关闭、移动或修改标签的语句。演示模式注入 `DemoSafariCapturer`，因此自动化和视觉验收不会触发 Apple Events 权限或读取真实 Safari。
 
 ## 7. 扩展设计
 
@@ -302,6 +327,8 @@ Bridge 连接后持续运行：
 - 分组覆盖结果保留实际命中的快照、窗口和标签组标识，使“查看快照”可以精确打开
   对应版本并滚动到组标题。
 - `SnapshotLibraryOrganizer` 只在内存中构建标签组版本序列；不修改 schema v1、快照文件或搜索索引。
+- 导航模型把 Chrome 的“现在/快照”和 Safari 的“按需收纳/合集”作为独立页面；资料库列表先按 `sourceKind` 过滤，再执行选择、删除和回落。
+- Safari 捕获只保存在一次用户动作产生的内存预览中，清除、失败或保存成功后不会启动任何持续同步。
 - 标签组快照只有在来源、窗口标识、标签组标识、显示名称和颜色全部一致时才进入同一序列；网页数量和网址允许随版本变化。
 - 完整现场快照和无法确认单组语境的资料始终作为独立条目。序列按最新版时间排序，序列内快照按创建时间倒序。
 - 删除序列中的选中版本时，应用优先选择同序列剩余版本；底层仓库仍只删除一个明确的快照文件。
@@ -311,6 +338,7 @@ Bridge 连接后持续运行：
 - 大列表使用懒加载容器；单个分组首次只建立 40 行视图，搜索首次只建立 50 行视图，其余结果按需分批显示。
 - 搜索结果保留一个显式选中标识；上下键可跨 50 项批次继续移动，并自动滚动到选中项。
 - 搜索结果以 `target = page | group` 区分网页与标签组；标签组结果保留来源、快照、窗口、标签组标识和网页数量，不伪造网址。
+- 每条搜索结果同时携带 `sourceKind`；Chrome 和 Safari 可以一起检索，但 UI 必须显示浏览器图标与文字，执行动作时禁止跨来源降级。
 - 标签组查看请求携带 `live:<sourceId>` 或 `snapshot:<snapshotId>` 作用域，只在对应列表消费一次；消费前会持久化展开状态，随后滚动到稳定的组锚点。
 
 ## 10. 搜索排序
@@ -343,6 +371,9 @@ Bridge 连接后持续运行：
 7. 应用、Bridge 和扩展没有外部网络请求。
 8. 开发与视觉验收不会加载扩展或连接真实 Chrome。
 9. 应用不会自动写入 Host 清单；隔离验收通过 `PAGECASE_NATIVE_HOST_ROOT` 改写目标目录。
+10. Safari 捕获只能由“读取当前窗口”按钮触发一次，不存在轮询、后台辅助进程或自动重试。
+11. Safari 脚本只读取标题、网址、标签顺序和当前页，不包含关闭、移动、网页脚本执行或内容读取。
+12. Chrome 快照和 Safari 合集的来源字段必须与各自范围一致，不能互相参与覆盖判断、标签组版本序列或浏览器专属动作。
 
 ## 12. 可演进边界
 

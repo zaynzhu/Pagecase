@@ -92,7 +92,7 @@ struct RootView: View {
           .font(.system(size: 13, weight: .semibold))
           .foregroundStyle(Palette.muted(colorScheme))
 
-        TextField("搜索网页、标签组或快照", text: $model.searchQuery)
+        TextField("搜索 Chrome 快照或 Safari 合集", text: $model.searchQuery)
           .textFieldStyle(.plain)
           .font(.system(size: 13))
           .focused($searchFocused)
@@ -134,10 +134,7 @@ struct RootView: View {
 
       Spacer(minLength: 8)
 
-      ConnectionBadge(
-        state: model.selectedLiveState,
-        isDemoMode: model.isDemoMode
-      )
+      contextBadge
     }
     .padding(.leading, 22)
     .padding(.trailing, 18)
@@ -148,12 +145,29 @@ struct RootView: View {
   @ViewBuilder
   private var selectedContent: some View {
     switch model.selection {
-    case .live:
+    case .chromeLive:
       LiveStateView(model: model)
-    case .snapshots:
+    case .chromeLibrary, .safariLibrary:
       SnapshotLibraryView(model: model)
+    case .safariImport:
+      SafariImportView(model: model)
     case .settings:
       SettingsView(model: model)
+    }
+  }
+
+  @ViewBuilder
+  private var contextBadge: some View {
+    if model.selection.browserKind == .safari {
+      BrowserModeBadge(
+        kind: .safari,
+        label: model.isDemoMode ? "Safari 演示" : "仅在点击时读取"
+      )
+    } else {
+      ConnectionBadge(
+        state: model.selectedLiveState,
+        isDemoMode: model.isDemoMode
+      )
     }
   }
 
@@ -163,7 +177,7 @@ struct RootView: View {
         .font(.system(size: 10, weight: .semibold))
       Text("数据只保存在本机")
       Text("·")
-      Text("不会自动关闭、移动或重组已有 Chrome 标签")
+      Text("不会自动关闭、移动或重组 Chrome 与 Safari 标签")
       Spacer()
       if model.isDemoMode {
         Text(model.isPerformanceMode ? "500 页性能演示" : "演示数据")

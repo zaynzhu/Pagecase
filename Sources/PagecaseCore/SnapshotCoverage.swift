@@ -58,7 +58,9 @@ public enum SnapshotCoverageEvaluator {
     let liveKeys = backupKeys(in: liveState.windows)
     let candidates = snapshots
       .filter {
-        $0.sourceId == liveState.source.id && $0.scope == .fullState
+        $0.sourceKind == liveState.source.kind
+          && $0.sourceId == liveState.source.id
+          && $0.scope == .fullState
       }
       .map { snapshot in
         (
@@ -97,7 +99,7 @@ public enum SnapshotCoverageEvaluator {
   ) -> GroupSnapshotCoverage {
     let liveURLs = group.tabs.map(\.url)
     let candidates = snapshots
-      .filter { $0.sourceId == sourceId }
+      .filter { $0.sourceKind == .chrome && $0.sourceId == sourceId }
       .flatMap { snapshot in
         snapshot.windows.flatMap { window in
           window.groups

@@ -7,15 +7,16 @@ struct SnapshotLibraryView: View {
   @State private var renameTarget: SavedSnapshot?
   @State private var deleteTarget: SavedSnapshot?
   @State private var restoreTarget: GroupRestoreTarget?
+  @State private var openCollectionTarget: SavedSnapshot?
   @State private var expandedSeriesIds: Set<String> = []
 
   var body: some View {
     Group {
-      if model.snapshots.isEmpty {
+      if model.librarySnapshots.isEmpty {
         EmptyStateView(
-          symbol: "archivebox",
-          title: "还没有快照",
-          message: "在“现在”页面保存当前现场。快照会保留窗口、标签组、顺序和重复网址。"
+          symbol: model.libraryBrowserKind == .safari ? "books.vertical" : "archivebox",
+          title: model.libraryEmptyTitle,
+          message: model.libraryEmptyMessage
         )
       } else {
         HSplitView {
@@ -30,9 +31,10 @@ struct SnapshotLibraryView: View {
     }
     .sheet(item: $renameTarget) { snapshot in
       SnapshotNameSheet(
-        title: "重命名快照",
+        title: snapshot.sourceKind == .safari ? "重命名合集" : "重命名快照",
         initialName: snapshot.name,
-        confirmTitle: "保存名称"
+        confirmTitle: "保存名称",
+        namePlaceholder: snapshot.sourceKind == .safari ? "合集名称" : "快照名称"
       ) { name in
         model.renameSnapshot(snapshot, name: name)
       }
@@ -45,7 +47,7 @@ struct SnapshotLibraryView: View {
       ),
       titleVisibility: .visible
     ) {
-      Button("删除快照", role: .destructive) {
+      Button(deleteTarget?.sourceKind == .safari ? "删除合集" : "删除快照", role: .destructive) {
         if let deleteTarget {
           model.deleteSnapshot(deleteTarget)
         }
@@ -80,17 +82,37 @@ struct SnapshotLibraryView: View {
     } message: {
       Text("将在 Chrome 中按原顺序新建并组合这些网页，不会关闭、移动或改变任何已有标签。")
     }
+    .confirmationDialog(
+      openCollectionDialogTitle,
+      isPresented: Binding(
+        get: { openCollectionTarget != nil },
+        set: { if !$0 { openCollectionTarget = nil } }
+      ),
+      titleVisibility: .visible
+    ) {
+      if let openCollectionTarget {
+        Button("在 Safari 打开 \(openCollectionTarget.tabCount) 个网页") {
+          model.openSafariCollection(openCollectionTarget)
+          self.openCollectionTarget = nil
+        }
+      }
+      Button("取消", role: .cancel) {
+        openCollectionTarget = nil
+      }
+    } message: {
+      Text("只会在 Safari 新建网页，不会关闭、移动或修改任何已有标签。")
+    }
   }
 
   private var index: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(alignment: .firstTextBaseline) {
-        Text("快照")
+        Text(model.libraryTitle)
           .font(.system(size: 24, weight: .semibold, design: .serif))
 
         Spacer()
 
-        Text("\(model.snapshots.count) 份")
+        Text("\(model.librarySnapshots.count) 份")
           .font(.system(size: 9, design: .monospaced))
           .foregroundStyle(Palette.muted(colorScheme))
       }
@@ -279,7 +301,7 @@ struct SnapshotLibraryView: View {
     guard let selectedSnapshotId = model.selectedSnapshotId,
           let series = SnapshotLibraryOrganizer.groupSeries(
             containing: selectedSnapshotId,
-            in: model.snapshots
+            in: model.librarySnapshots
           ),
           series.latestSnapshot.id != selectedSnapshotId else {
       return
@@ -295,10 +317,15 @@ struct SnapshotLibraryView: View {
           LazyVStack(alignment: .leading, spacing: 22) {
             HStack(alignment: .top) {
               VStack(alignment: .leading, spacing: 7) {
+                BrowserModeBadge(
+                  kind: snapshot.sourceKind,
+                  label: snapshot.sourceKind == .safari ? "本地合集" : "本地快照"
+                )
+
                 Text(snapshot.name)
                   .font(.system(size: 29, weight: .semibold, design: .serif))
 
-                Text("\(snapshotScopeDetailTitle(snapshot)) · \(snapshot.createdAt.formatted(date: .long, time: .shortened)) · \(snapshot.groupCount) 个标签组 · \(snapshot.tabCount) 个网页")
+                Text(snapshotDetailMetadata(snapshot))
                   .font(.system(size: 11, design: .monospaced))
                   .foregroundStyle(Palette.muted(colorScheme))
               }
@@ -306,6 +333,17 @@ struct SnapshotLibraryView: View {
               Spacer()
 
               HStack(spacing: 8) {
+                if snapshot.sourceKind == .safari {
+                  Button {
+                    openCollectionTarget = snapshot
+                  } label: {
+                    Label("在 Safari 打开全部", systemImage: "safari")
+                      .font(.system(size: 11, weight: .medium))
+                  }
+                  .buttonStyle(.bordered)
+                  .controlSize(.small)
+                }
+
                 Menu {
                   Button("重命名") {
                     renameTarget = snapshot
@@ -316,18 +354,18 @@ struct SnapshotLibraryView: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
-                .help("更多快照操作")
+                .help(snapshot.sourceKind == .safari ? "更多合集操作" : "更多快照操作")
 
                 Button(role: .destructive) {
                   deleteTarget = snapshot
                 } label: {
-                  Label("删除快照", systemImage: "trash")
+                  Label(snapshot.sourceKind == .safari ? "删除合集" : "删除快照", systemImage: "trash")
                     .font(.system(size: 11, weight: .medium))
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .help("从本机删除这份快照")
-                .accessibilityHint("删除前会再次确认，不会影响 Chrome")
+                .help(snapshot.sourceKind == .safari ? "从本机删除这份 Safari 合集" : "从本机删除这份 Chrome 快照")
+                .accessibilityHint("删除前会再次确认，不会影响浏览器")
               }
             }
 
@@ -335,10 +373,14 @@ struct SnapshotLibraryView: View {
               WindowSection(
                 window: window,
                 action: { page in
-                  model.open(page: page, sourceId: snapshot.sourceId)
+                  if snapshot.sourceKind == .safari {
+                    model.openSafari(page: page)
+                  } else {
+                    model.open(page: page, sourceId: snapshot.sourceId)
+                  }
                 },
-                actionTitle: model.snapshotActionTitle(for: snapshot.sourceId),
-                actionEnabled: model.isSourceActionAvailable(snapshot.sourceId),
+                actionTitle: model.snapshotActionTitle(for: snapshot),
+                actionEnabled: model.isSnapshotActionAvailable(snapshot),
                 isGroupExpanded: { groupId in
                   model.isGroupExpanded(
                     scope: "snapshot:\(snapshot.id)",
@@ -355,10 +397,13 @@ struct SnapshotLibraryView: View {
                 },
                 groupCoverage: { _ in nil },
                 groupActionTitle: { _ in
-                  model.snapshotGroupActionTitle(for: snapshot.sourceId)
+                  snapshot.sourceKind == .chrome
+                    ? model.snapshotGroupActionTitle(for: snapshot.sourceId)
+                    : nil
                 },
                 groupActionEnabled: { _ in
-                  model.isSourceActionAvailable(snapshot.sourceId)
+                  snapshot.sourceKind == .chrome
+                    && model.isSourceActionAvailable(snapshot.sourceId)
                 },
                 groupAction: { group in
                   restoreTarget = GroupRestoreTarget(
@@ -366,7 +411,8 @@ struct SnapshotLibraryView: View {
                     sourceId: snapshot.sourceId,
                     group: group
                   )
-                }
+                },
+                ungroupedTitle: snapshot.sourceKind == .safari ? "合集网页" : "未分组"
               )
             }
           }
@@ -383,7 +429,11 @@ struct SnapshotLibraryView: View {
         }
       }
     } else {
-      EmptyStateView(symbol: "archivebox", title: "选择一个快照", message: "")
+      EmptyStateView(
+        symbol: model.libraryBrowserKind == .safari ? "books.vertical" : "archivebox",
+        title: model.libraryBrowserKind == .safari ? "选择一个合集" : "选择一个快照",
+        message: ""
+      )
     }
   }
 
@@ -396,24 +446,54 @@ struct SnapshotLibraryView: View {
 
   private var deleteDialogTitle: String {
     guard let deleteTarget else {
-      return "删除这个快照？"
+      return "删除这份资料？"
     }
     return "删除「\(deleteTarget.name)」？"
   }
 
   private var deleteDialogMessage: String {
     guard let deleteTarget else {
-      return "只删除本地快照，不会影响 Chrome。"
+      return "只删除本地资料，不会影响浏览器。"
     }
-    return "将从本机永久删除这份包含 \(deleteTarget.tabCount) 个网页的快照。此操作无法撤销，但不会影响 Chrome。"
+    let type = deleteTarget.sourceKind == .safari ? "合集" : "快照"
+    return "将从本机永久删除这份包含 \(deleteTarget.tabCount) 个网页的\(type)。此操作无法撤销，但不会影响 \(deleteTarget.sourceKind.displayName)。"
   }
 
   private func snapshotScopeTitle(_ snapshot: SavedSnapshot) -> String {
-    snapshot.scope == .group ? "标签组" : "完整现场"
+    switch snapshot.scope {
+    case .group:
+      return "标签组"
+    case .collection:
+      return "Safari 合集"
+    case .fullState:
+      return "完整现场"
+    }
   }
 
   private func snapshotScopeDetailTitle(_ snapshot: SavedSnapshot) -> String {
-    snapshot.scope == .group ? "标签组快照" : "完整现场快照"
+    switch snapshot.scope {
+    case .group:
+      return "标签组快照"
+    case .collection:
+      return "Safari 合集"
+    case .fullState:
+      return "完整现场快照"
+    }
+  }
+
+  private func snapshotDetailMetadata(_ snapshot: SavedSnapshot) -> String {
+    let base = "\(snapshotScopeDetailTitle(snapshot)) · \(snapshot.createdAt.formatted(date: .long, time: .shortened))"
+    if snapshot.sourceKind == .safari {
+      return "\(base) · \(snapshot.tabCount) 个网页"
+    }
+    return "\(base) · \(snapshot.groupCount) 个标签组 · \(snapshot.tabCount) 个网页"
+  }
+
+  private var openCollectionDialogTitle: String {
+    guard let openCollectionTarget else {
+      return "打开 Safari 合集？"
+    }
+    return "打开「\(openCollectionTarget.name)」？"
   }
 
   private func focusRequestedGroup(using proxy: ScrollViewProxy) {

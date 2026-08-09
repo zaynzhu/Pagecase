@@ -36,6 +36,8 @@ public struct SnapshotRepository: Sendable {
       name: trimmedName,
       createdAt: now,
       sourceId: state.source.id,
+      sourceKind: state.source.kind,
+      sourceLabel: state.source.label,
       windows: state.windows
     )
     try saveSnapshot(snapshot)
@@ -47,6 +49,7 @@ public struct SnapshotRepository: Sendable {
     from group: TabGroup,
     in window: BrowserWindow,
     sourceId: String,
+    sourceLabel: String = "Chrome",
     name: String,
     now: Date = Date()
   ) throws -> SavedSnapshot {
@@ -66,9 +69,21 @@ public struct SnapshotRepository: Sendable {
       name: trimmedName,
       createdAt: now,
       sourceId: sourceId,
+      sourceKind: .chrome,
+      sourceLabel: sourceLabel,
       scope: .group,
       windows: [snapshotWindow]
     )
+    try saveSnapshot(snapshot)
+    return snapshot
+  }
+
+  @discardableResult
+  public func createSafariCollection(
+    from capture: SafariCapture,
+    name: String
+  ) throws -> SavedSnapshot {
+    let snapshot = try SafariCollectionBuilder.makeSnapshot(from: capture, name: name)
     try saveSnapshot(snapshot)
     return snapshot
   }
@@ -142,6 +157,8 @@ public struct SnapshotRepository: Sendable {
           createdAt: snapshot.createdAt,
           updatedAt: now,
           sourceId: snapshot.sourceId,
+          sourceKind: snapshot.sourceKind,
+          sourceLabel: snapshot.sourceLabel,
           scope: snapshot.scope,
           windows: snapshot.windows
         )

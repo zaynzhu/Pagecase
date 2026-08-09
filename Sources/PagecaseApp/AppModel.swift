@@ -3,18 +3,24 @@ import Foundation
 import PagecaseCore
 
 enum NavigationItem: String, CaseIterable, Identifiable {
-  case live
-  case snapshots
+  case chromeLive
+  case chromeLibrary
+  case safariImport
+  case safariLibrary
   case settings
 
   var id: String { rawValue }
 
   var title: String {
     switch self {
-    case .live:
+    case .chromeLive:
       return "现在"
-    case .snapshots:
+    case .chromeLibrary:
       return "快照"
+    case .safariImport:
+      return "按需收纳"
+    case .safariLibrary:
+      return "合集"
     case .settings:
       return "设置"
     }
@@ -22,12 +28,27 @@ enum NavigationItem: String, CaseIterable, Identifiable {
 
   var symbol: String {
     switch self {
-    case .live:
+    case .chromeLive:
       return "rectangle.stack"
-    case .snapshots:
+    case .chromeLibrary:
       return "archivebox"
+    case .safariImport:
+      return "safari"
+    case .safariLibrary:
+      return "books.vertical"
     case .settings:
       return "gearshape"
+    }
+  }
+
+  var browserKind: BrowserKind? {
+    switch self {
+    case .chromeLive, .chromeLibrary:
+      return .chrome
+    case .safariImport, .safariLibrary:
+      return .safari
+    case .settings:
+      return nil
     }
   }
 }
@@ -63,9 +84,9 @@ struct GroupFocusRequest: Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
-  static let applicationVersion = "0.5.0"
+  static let applicationVersion = "0.6.0"
 
-  @Published var selection: NavigationItem = .live
+  @Published var selection: NavigationItem = .chromeLive
   @Published var liveStates: [LiveState] = []
   @Published var snapshots: [SavedSnapshot] = []
   @Published var selectedSourceId: String?
@@ -78,6 +99,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var sourceAvailabilityById: [String: SourceAvailability] = [:]
   @Published private(set) var collapsedGroupKeys: Set<String> = []
   @Published private(set) var groupFocusRequest: GroupFocusRequest?
+  @Published private(set) var safariCapture: SafariCapture?
   @Published var notice: AppNotice?
 
   let paths: AppPaths
@@ -91,6 +113,7 @@ final class AppModel: ObservableObject {
   private let nativeHostManager: NativeHostManager
   private let extensionPackageManager: ExtensionPackageManager
   private let displayPreferencesRepository: DisplayPreferencesRepository
+  private let safariCapturer: any SafariCapturing
   private var pendingCommands: [String: Date] = [:]
   private var contentSignature: String?
   private var handledSearchFocusRequest = 0
@@ -140,11 +163,14 @@ final class AppModel: ObservableObject {
     isPerformanceMode: Bool = false,
     nativeHostDirectory: URL? = nil,
     bridgeURL: URL? = nil,
-    extensionDirectory: URL? = nil
+    extensionDirectory: URL? = nil,
+    safariCapturer: (any SafariCapturing)? = nil
   ) {
     self.paths = paths
     self.isDemoMode = isDemoMode
     self.isPerformanceMode = isPerformanceMode
+    self.safariCapturer = safariCapturer
+      ?? (isDemoMode ? DemoSafariCapturer() : SystemSafariCapturer())
     let resolvedBridgeURL = bridgeURL
       ?? Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/PagecaseBridge")
     let manager = NativeHostManager(
@@ -214,14 +240,44 @@ final class AppModel: ObservableObject {
 
   var selectedSnapshot: SavedSnapshot? {
     if let selectedSnapshotId,
-       let selected = snapshots.first(where: { $0.id == selectedSnapshotId }) {
+       let selected = librarySnapshots.first(where: { $0.id == selectedSnapshotId }) {
       return selected
     }
-    return snapshots.first
+    return librarySnapshots.first
   }
 
   var snapshotLibraryItems: [SnapshotLibraryItem] {
-    SnapshotLibraryOrganizer.organize(snapshots)
+    SnapshotLibraryOrganizer.organize(librarySnapshots)
+  }
+
+  var chromeSnapshots: [SavedSnapshot] {
+    snapshots.filter { $0.sourceKind == .chrome }
+  }
+
+  var safariCollections: [SavedSnapshot] {
+    snapshots.filter { $0.sourceKind == .safari }
+  }
+
+  var librarySnapshots: [SavedSnapshot] {
+    selection == .safariLibrary ? safariCollections : chromeSnapshots
+  }
+
+  var libraryBrowserKind: BrowserKind {
+    selection == .safariLibrary ? .safari : .chrome
+  }
+
+  var libraryTitle: String {
+    libraryBrowserKind == .safari ? "Safari 合集" : "Chrome 快照"
+  }
+
+  var libraryEmptyTitle: String {
+    libraryBrowserKind == .safari ? "还没有 Safari 合集" : "还没有 Chrome 快照"
+  }
+
+  var libraryEmptyMessage: String {
+    libraryBrowserKind == .safari
+      ? "先打开“按需收纳”，读取 Safari 当前窗口并保存。"
+      : "在 Chrome 的“现在”页面保存当前现场或单个标签组。"
   }
 
   var searchResults: [SearchResult] {
@@ -244,6 +300,23 @@ final class AppModel: ObservableObject {
 
   var totalLiveTabs: Int {
     liveStates.reduce(0) { $0 + $1.tabCount }
+  }
+
+  func selectNavigation(_ item: NavigationItem) {
+    selection = item
+    searchQuery = ""
+    switch item {
+    case .chromeLibrary:
+      if !chromeSnapshots.contains(where: { $0.id == selectedSnapshotId }) {
+        selectedSnapshotId = chromeSnapshots.first?.id
+      }
+    case .safariLibrary:
+      if !safariCollections.contains(where: { $0.id == selectedSnapshotId }) {
+        selectedSnapshotId = safariCollections.first?.id
+      }
+    case .chromeLive, .safariImport, .settings:
+      break
+    }
   }
 
   var hasConnectedSource: Bool {
@@ -287,8 +360,15 @@ final class AppModel: ObservableObject {
     isSourceActionAvailable(sourceId) ? "定位" : "数据已过期"
   }
 
-  func snapshotActionTitle(for sourceId: String) -> String {
-    isSourceActionAvailable(sourceId) ? "打开" : "Chrome 未连接"
+  func isSnapshotActionAvailable(_ snapshot: SavedSnapshot) -> Bool {
+    snapshot.sourceKind == .safari || isSourceActionAvailable(snapshot.sourceId)
+  }
+
+  func snapshotActionTitle(for snapshot: SavedSnapshot) -> String {
+    if snapshot.sourceKind == .safari {
+      return "在 Safari 打开"
+    }
+    return isSourceActionAvailable(snapshot.sourceId) ? "打开" : "Chrome 未连接"
   }
 
   func snapshotGroupActionTitle(for sourceId: String) -> String {
@@ -337,6 +417,9 @@ final class AppModel: ObservableObject {
     if result.target == .group {
       return true
     }
+    if result.kind == .snapshot, result.sourceKind == .safari {
+      return true
+    }
     return isSourceActionAvailable(result.sourceId)
   }
 
@@ -348,7 +431,10 @@ final class AppModel: ObservableObject {
     case .live:
       return liveActionTitle(for: result.sourceId)
     case .snapshot:
-      return snapshotActionTitle(for: result.sourceId)
+      if result.sourceKind == .safari {
+        return "在 Safari 打开"
+      }
+      return isSourceActionAvailable(result.sourceId) ? "打开" : "Chrome 未连接"
     }
   }
 
@@ -440,6 +526,7 @@ final class AppModel: ObservableObject {
         from: group,
         in: window,
         sourceId: sourceId,
+        sourceLabel: state.source.label,
         name: name
       )
       selectedSnapshotId = snapshot.id
@@ -447,6 +534,52 @@ final class AppModel: ObservableObject {
       notice = AppNotice(
         kind: .success,
         message: "已从磁盘核对保存「\(group.displayTitle)」的 \(snapshot.tabCount) 个网页，Chrome 保持不变"
+      )
+      return true
+    } catch {
+      notice = AppNotice(kind: .error, message: error.localizedDescription)
+      return false
+    }
+  }
+
+  func captureSafariCurrentWindow() {
+    do {
+      safariCapture = try safariCapturer.captureCurrentWindow()
+      let skipped = safariCapture?.skippedPageCount ?? 0
+      notice = AppNotice(
+        kind: skipped > 0 ? .warning : .success,
+        message: skipped > 0
+          ? "已读取 \(safariCapture?.pages.count ?? 0) 个网页，并忽略 \(skipped) 个非网页标签"
+          : "已读取 Safari 当前窗口的 \(safariCapture?.pages.count ?? 0) 个网页"
+      )
+    } catch {
+      safariCapture = nil
+      notice = AppNotice(kind: .error, message: error.localizedDescription)
+    }
+  }
+
+  func clearSafariCapture() {
+    safariCapture = nil
+  }
+
+  func saveSafariCollection(name: String) -> Bool {
+    guard let safariCapture, let snapshotRepository else {
+      notice = AppNotice(kind: .warning, message: "请先读取 Safari 当前窗口")
+      return false
+    }
+
+    do {
+      let snapshot = try snapshotRepository.createSafariCollection(
+        from: safariCapture,
+        name: name
+      )
+      selectedSnapshotId = snapshot.id
+      self.safariCapture = nil
+      refresh(force: true)
+      selectNavigation(.safariLibrary)
+      notice = AppNotice(
+        kind: .success,
+        message: "已从磁盘核对保存 \(snapshot.tabCount) 个 Safari 网页，Safari 保持不变"
       )
       return true
     } catch {
@@ -481,7 +614,7 @@ final class AppModel: ObservableObject {
       let scope = "live:\(result.sourceId)"
       expandGroupIfNeeded(scope: scope, windowId: windowId, groupId: groupId)
       selectedSourceId = result.sourceId
-      selection = .live
+      selection = .chromeLive
       searchQuery = ""
       groupFocusRequest = GroupFocusRequest(
         scope: scope,
@@ -538,7 +671,10 @@ final class AppModel: ObservableObject {
       let updated = try snapshotRepository.renameSnapshot(snapshot, to: name)
       selectedSnapshotId = updated.id
       refresh(force: true)
-      notice = AppNotice(kind: .success, message: "快照已重命名")
+      notice = AppNotice(
+        kind: .success,
+        message: snapshot.sourceKind == .safari ? "合集已重命名" : "快照已重命名"
+      )
       return true
     } catch {
       notice = AppNotice(kind: .error, message: error.localizedDescription)
@@ -556,12 +692,18 @@ final class AppModel: ObservableObject {
         containing: snapshot.id,
         in: snapshots
       )?.snapshots.first(where: { $0.id != snapshot.id })?.id
+      let nextBrowserSnapshotId = snapshots.first(where: {
+        $0.sourceKind == snapshot.sourceKind && $0.id != snapshot.id
+      })?.id
       try snapshotRepository.deleteSnapshot(id: snapshot.id)
       if selectedSnapshotId == snapshot.id {
-        selectedSnapshotId = nextVersionId
+        selectedSnapshotId = nextVersionId ?? nextBrowserSnapshotId
       }
       refresh(force: true)
-      notice = AppNotice(kind: .success, message: "快照已删除")
+      notice = AppNotice(
+        kind: .success,
+        message: snapshot.sourceKind == .safari ? "合集已删除" : "快照已删除"
+      )
     } catch {
       notice = AppNotice(kind: .error, message: "删除失败：\(error.localizedDescription)")
     }
@@ -593,6 +735,10 @@ final class AppModel: ObservableObject {
         notice = AppNotice(kind: .error, message: "网页地址不完整")
         return
       }
+      if result.sourceKind == .safari {
+        openInSafari(urls: [url])
+        return
+      }
       enqueue(
         BrowserCommand(
           sourceId: result.sourceId,
@@ -613,7 +759,7 @@ final class AppModel: ObservableObject {
         kind: .warning,
         message: result.kind == .live
           ? "实时数据已经过期，等待 Chrome 重新连接后才能定位"
-          : "Chrome 未连接，暂时无法打开这个快照网页"
+          : "对应浏览器暂时无法打开这个快照网页"
       )
       return
     }
@@ -628,7 +774,7 @@ final class AppModel: ObservableObject {
     let scope = "snapshot:\(snapshotId)"
     expandGroupIfNeeded(scope: scope, windowId: windowId, groupId: groupId)
     selectedSnapshotId = snapshotId
-    selection = .snapshots
+    selection = .chromeLibrary
     searchQuery = ""
     groupFocusRequest = GroupFocusRequest(
       scope: scope,
@@ -700,6 +846,20 @@ final class AppModel: ObservableObject {
     )
   }
 
+  func openSafari(page: PageItem) {
+    openInSafari(urls: [page.url])
+  }
+
+  func openSafariCollection(_ snapshot: SavedSnapshot) {
+    guard snapshot.sourceKind == .safari else {
+      return
+    }
+    let urls = snapshot.windows
+      .flatMap { $0.groups.flatMap(\.tabs) + $0.ungroupedTabs }
+      .map(\.url)
+    openInSafari(urls: urls)
+  }
+
   func restore(group: TabGroup, sourceId: String) {
     enqueue(
       BrowserCommand(
@@ -710,6 +870,35 @@ final class AppModel: ObservableObject {
         urls: group.tabs.map(\.url)
       ),
       demoMessage: "演示模式不会在 Chrome 中恢复标签组"
+    )
+  }
+
+  private func openInSafari(urls: [String]) {
+    let webURLs = urls.compactMap(URL.init(string:))
+    guard !webURLs.isEmpty else {
+      notice = AppNotice(kind: .warning, message: "没有可以在 Safari 打开的网页")
+      return
+    }
+    if isDemoMode {
+      notice = AppNotice(kind: .warning, message: "演示模式不会打开真实 Safari")
+      return
+    }
+
+    guard let safariURL = NSWorkspace.shared.urlForApplication(
+      withBundleIdentifier: "com.apple.Safari"
+    ) else {
+      notice = AppNotice(kind: .error, message: "无法找到 Safari 应用")
+      return
+    }
+    NSWorkspace.shared.open(
+      webURLs,
+      withApplicationAt: safariURL,
+      configuration: NSWorkspace.OpenConfiguration(),
+      completionHandler: nil
+    )
+    notice = AppNotice(
+      kind: .success,
+      message: "已请求 Safari 打开 \(webURLs.count) 个网页"
     )
   }
 
@@ -762,7 +951,7 @@ final class AppModel: ObservableObject {
     do {
       let imported = try snapshotRepository.importLibrary(from: url)
       refresh(force: true)
-      notice = AppNotice(kind: .success, message: "已导入 \(imported.count) 个快照")
+      notice = AppNotice(kind: .success, message: "已导入 \(imported.count) 份本地资料")
     } catch {
       notice = AppNotice(kind: .error, message: "导入失败：\(error.localizedDescription)")
     }

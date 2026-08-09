@@ -132,10 +132,45 @@ struct SettingsView: View {
           )
         }
 
+        settingsSection("Safari 按需收纳") {
+          settingRow(
+            symbol: "safari",
+            title: "接入方式",
+            detail: "只在点击时读取当前窗口，不安装插件、不后台轮询"
+          )
+
+          Divider()
+
+          HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "externaldrive.badge.checkmark")
+              .font(.system(size: 13, weight: .semibold))
+              .foregroundStyle(BrowserKind.safari.accentColor)
+              .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 6) {
+              Text("Safari 合集与 Chrome 快照分开显示")
+                .font(.system(size: 12, weight: .medium))
+              Text("第一次真实读取时，macOS 会询问是否允许页匣访问 Safari。页匣不读取正文，也不会修改标签。")
+                .font(.system(size: 11))
+                .foregroundStyle(Palette.muted(colorScheme))
+                .lineSpacing(3)
+            }
+
+            Spacer()
+
+            Button("打开按需收纳") {
+              model.selectNavigation(.safariImport)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+          }
+        }
+
         settingsSection("安全边界") {
           VStack(alignment: .leading, spacing: 12) {
             safetyLine("不会自动关闭标签", symbol: "xmark.bin")
             safetyLine("不会移动、挂起或重新分组标签", symbol: "rectangle.3.group")
+            safetyLine("Safari 只在点击时读取当前窗口", symbol: "safari")
             safetyLine("不读取网页正文、截图或浏览历史", symbol: "doc.text.magnifyingglass")
             safetyLine("不登录、不联网、不上传数据", symbol: "lock")
           }
@@ -161,7 +196,7 @@ struct SettingsView: View {
       }
       Button("取消", role: .cancel) {}
     } message: {
-      Text("只删除页匣的 Host 清单，不删除扩展、快照或 Chrome 标签。")
+      Text("只删除页匣的 Host 清单，不删除扩展、本地资料或 Chrome 标签。")
     }
   }
 

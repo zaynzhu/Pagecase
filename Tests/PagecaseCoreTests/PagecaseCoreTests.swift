@@ -45,8 +45,8 @@ func snapshotLibraryCollectsGroupVersionsWithoutMergingSnapshots() throws {
     return
   }
 
-  #expect(snapshots.count == 4)
-  #expect(items.count == 3)
+  #expect(snapshots.count == 5)
+  #expect(items.count == 4)
   #expect(series.title == "开发")
   #expect(series.snapshots.map(\.id) == [
     "demo-snapshot-development-group",
@@ -64,7 +64,54 @@ func snapshotLibraryCollectsGroupVersionsWithoutMergingSnapshots() throws {
       return true
     }
     return false
+  }.count == 3)
+}
+
+@Test
+func safariCollectionKeepsBrowserBoundaryAndDuplicateURLs() throws {
+  let capture = DemoData.safariCapture(referenceDate: referenceDate)
+  let snapshot = try SafariCollectionBuilder.makeSnapshot(
+    from: capture,
+    name: "  阅读资料  "
+  )
+
+  #expect(snapshot.name == "阅读资料")
+  #expect(snapshot.sourceKind == .safari)
+  #expect(snapshot.sourceId == SafariCollectionBuilder.sourceId)
+  #expect(snapshot.sourceLabel == SafariCollectionBuilder.sourceLabel)
+  #expect(snapshot.scope == .collection)
+  #expect(snapshot.windows.count == 1)
+  #expect(snapshot.windows[0].groups.isEmpty)
+  #expect(snapshot.tabCount == 4)
+  #expect(snapshot.windows[0].ungroupedTabs.filter {
+    $0.url == "https://example.com/safari-reading"
   }.count == 2)
+  #expect(snapshot.windows[0].ungroupedTabs.first?.active == true)
+  try PagecaseValidator.validate(snapshot)
+}
+
+@Test
+func safariCollectionPersistsAndSearchesAsSafari() throws {
+  try withTemporaryPaths { paths in
+    let repository = try SnapshotRepository(paths: paths)
+    let snapshot = try repository.createSafariCollection(
+      from: DemoData.safariCapture(referenceDate: referenceDate),
+      name: "Safari 阅读"
+    )
+    let persisted = try #require(repository.loadSnapshots().first)
+    let result = try #require(
+      SearchEngine.search(
+        query: "WebKit",
+        liveStates: [],
+        snapshots: [persisted]
+      ).first
+    )
+
+    #expect(persisted == snapshot)
+    #expect(result.sourceKind == .safari)
+    #expect(result.sourceLabel == SafariCollectionBuilder.sourceLabel)
+    #expect(result.kind == .snapshot)
+  }
 }
 
 @Test
@@ -245,6 +292,21 @@ func snapshotCoveragePreservesContextDuplicatesAndClosedPages() throws {
   )
   #expect(missingCoverage.snapshot == nil)
   #expect(missingCoverage.uncoveredPageCount == state.tabCount)
+
+  let safariImpostor = SavedSnapshot(
+    id: "safari-impostor",
+    name: "不应覆盖 Chrome",
+    sourceId: state.source.id,
+    sourceKind: .safari,
+    sourceLabel: "Safari",
+    windows: state.windows
+  )
+  #expect(
+    SnapshotCoverageEvaluator.evaluate(
+      liveState: state,
+      snapshots: [safariImpostor]
+    ).snapshot == nil
+  )
 }
 
 @Test
@@ -481,6 +543,8 @@ func legacySnapshotWithoutScopeDefaultsToFullState() throws {
     JSONSerialization.jsonObject(with: encoded) as? [String: Any]
   )
   object.removeValue(forKey: "scope")
+  object.removeValue(forKey: "sourceKind")
+  object.removeValue(forKey: "sourceLabel")
   let legacyData = try JSONSerialization.data(withJSONObject: object)
 
   let decoded = try PagecaseJSON.makeDecoder().decode(
@@ -489,7 +553,41 @@ func legacySnapshotWithoutScopeDefaultsToFullState() throws {
   )
 
   #expect(decoded.scope == .fullState)
+  #expect(decoded.sourceKind == .chrome)
+  #expect(decoded.sourceLabel == "Chrome")
   #expect(decoded.windows == snapshot.windows)
+}
+
+@Test
+func safariCollectionRejectsChromeOrGroupedContent() throws {
+  let chromeCollection = SavedSnapshot(
+    id: "invalid-chrome-collection",
+    name: "错误合集",
+    sourceId: "chrome-source",
+    scope: .collection,
+    windows: [
+      BrowserWindow(
+        id: 1,
+        order: 0,
+        focused: true,
+        groups: [],
+        ungroupedTabs: [
+          PageItem(
+            id: 1,
+            windowId: 1,
+            groupId: nil,
+            index: 0,
+            title: "网页",
+            url: "https://example.com"
+          )
+        ]
+      )
+    ]
+  )
+
+  #expect(throws: StoreError.self) {
+    try PagecaseValidator.validate(chromeCollection)
+  }
 }
 
 @Test

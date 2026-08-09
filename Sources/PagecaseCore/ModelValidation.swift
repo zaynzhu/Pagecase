@@ -6,7 +6,7 @@ public enum PagecaseValidator {
       throw StoreError.unsupportedSchema(state.schemaVersion)
     }
     try validateIdentifier(state.source.id, field: "来源标识")
-    guard state.source.kind == "chrome" else {
+    guard state.source.kind == .chrome else {
       throw StoreError.invalidFile("来源类型必须是 chrome")
     }
     try validate(windows: state.windows)
@@ -21,12 +21,27 @@ public enum PagecaseValidator {
     guard !snapshot.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
       throw StoreError.invalidFile("快照名称不能为空")
     }
+    guard !snapshot.sourceLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      throw StoreError.invalidFile("来源名称不能为空")
+    }
     if snapshot.scope == .group {
-      guard snapshot.windows.count == 1,
+      guard snapshot.sourceKind == .chrome,
+            snapshot.windows.count == 1,
             snapshot.windows[0].groups.count == 1,
             snapshot.windows[0].ungroupedTabs.isEmpty else {
         throw StoreError.invalidFile("标签组快照必须只包含一个标签组")
       }
+    }
+    if snapshot.scope == .collection {
+      guard snapshot.sourceKind == .safari,
+            snapshot.windows.count == 1,
+            snapshot.windows[0].groups.isEmpty,
+            !snapshot.windows[0].ungroupedTabs.isEmpty else {
+        throw StoreError.invalidFile("Safari 合集必须只包含当前窗口的网页")
+      }
+    }
+    if snapshot.scope == .fullState, snapshot.sourceKind != .chrome {
+      throw StoreError.invalidFile("完整现场快照必须来自 Chrome")
     }
     try validate(windows: snapshot.windows)
   }

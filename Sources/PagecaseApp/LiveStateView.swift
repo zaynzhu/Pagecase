@@ -267,6 +267,7 @@ struct WindowSection: View {
   let groupActionTitle: (TabGroup) -> String?
   let groupActionEnabled: (TabGroup) -> Bool
   let groupAction: ((TabGroup) -> Void)?
+  var ungroupedTitle = "未分组"
 
   @Environment(\.colorScheme) private var colorScheme
 
@@ -320,7 +321,7 @@ struct WindowSection: View {
 
         if !window.ungroupedTabs.isEmpty {
           PageGroupView(
-            title: "未分组",
+            title: ungroupedTitle,
             color: ChromeGroupColor.grey.displayColor,
             pages: window.ungroupedTabs,
             collapsed: false,
