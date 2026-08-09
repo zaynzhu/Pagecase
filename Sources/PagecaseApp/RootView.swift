@@ -57,16 +57,29 @@ struct RootView: View {
       model.handleSearchQueryChange()
     }
     .overlay(alignment: .topTrailing) {
-      if let notice = model.notice {
-        NoticeView(notice: notice) {
-          model.dismissNotice()
+      VStack(alignment: .trailing, spacing: 10) {
+        if let receipt = model.chromeRestoreReceipt, shouldShowChromeReceipt {
+          ChromeRestoreReceiptView(
+            receipt: receipt,
+            isDemoMode: model.isDemoMode
+          ) {
+            model.dismissChromeRestoreReceipt()
+          }
+          .transition(.move(edge: .top).combined(with: .opacity))
         }
-        .padding(.top, 54)
-        .padding(.trailing, 18)
-        .transition(.move(edge: .top).combined(with: .opacity))
+
+        if let notice = model.notice {
+          NoticeView(notice: notice) {
+            model.dismissNotice()
+          }
+          .transition(.move(edge: .top).combined(with: .opacity))
+        }
       }
+      .padding(.top, 54)
+      .padding(.trailing, 18)
     }
     .animation(.easeOut(duration: 0.18), value: model.notice)
+    .animation(.easeOut(duration: 0.18), value: model.chromeRestoreReceipt)
     .sheet(item: $model.pendingLibraryImport) { _ in
       LibraryImportPreviewView(model: model)
     }
@@ -203,6 +216,13 @@ struct RootView: View {
 
   private var isSearchActive: Bool {
     !model.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+  }
+
+  private var shouldShowChromeReceipt: Bool {
+    if model.selection.browserKind == .safari {
+      return false
+    }
+    return !isSearchActive || model.searchBrowserFilter != .safari
   }
 
   private var footer: some View {

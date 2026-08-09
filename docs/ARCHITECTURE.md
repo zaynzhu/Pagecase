@@ -271,6 +271,15 @@ Native Messaging 连接存活时每 20 秒发送一次只读现场心跳，使�
 - `commandResult`
 - `ping`
 
+`commandResult` 保留原有 `id`、`sourceId`、`success` 与 `message`，并可携带结构化恢复字段：
+
+- `action`：回显实际执行的命令类型，应用据此拒绝错配结果。
+- `createdTabCount`：已经由 Chrome 确认创建的标签数量。
+- `groupCreated`：本次新标签是否已经组成标签组。
+- `failureStage`：`validation`、`creatingTabs`、`groupingTabs` 或 `updatingGroup`。
+
+新增字段均为可选，以继续读取旧版 Bridge 已落盘的结果；旧版成功结果仅在命令标识与来源一致后推断为完整成功，结果一旦携带 `action` 就必须与原命令匹配。
+
 Bridge 到扩展：
 
 - `focusTab`
@@ -287,7 +296,7 @@ Bridge 连接后持续运行：
 5. 将命令原子移动至 `processing/` 后发送。
 6. 收到结果后写入 `results/` 并清理处理中命令。
 
-应用等待 `focusTab` 与 `openUrl` 结果最多 3 秒，等待可能创建多个标签的 `restoreGroup` 最多 30 秒。超时只显示失败，不自动重试可能产生副作用的 `openUrl` 或 `restoreGroup`。
+应用等待 `focusTab` 与 `openUrl` 结果最多 3 秒，等待可能创建多个标签的 `restoreGroup` 最多 30 秒。待处理恢复项保留完整命令，不只保存截止时间，便于结果到达后校验来源、动作和应创建数量。超时只显示回执，不自动重试可能产生副作用的 `openUrl` 或 `restoreGroup`。
 
 ### 8.1 首次连接准备
 
@@ -337,6 +346,7 @@ Bridge 连接后持续运行：
   对应版本并滚动到组标题。
 - Chrome 实时页用同一分组覆盖结果在内存中计算“全部 / 需保存 / 已收纳”；筛选只构造当前视图需要的窗口与标签组数组，不写偏好、不改模型，也不发送浏览器命令。
 - `GroupRestorePreviewBuilder` 只在用户点击 Chrome“恢复整组”时运行；它只选择标识匹配且 `kind = chrome` 的实时来源，以完整网址和重复次数计算当前已打开数量，不读取 Safari 合集，也不改变将发送的完整网址列表。
+- `GroupRestoreReceiptBuilder` 只处理 `restoreGroup`：完整创建且成组为成功，已创建任意标签或已成组但后续失败为部分完成，零副作用错误为失败，30 秒无结果为超时。回执不发起清理或重试；Safari 导航与 Safari 专属搜索只隐藏 Chrome 回执，不销毁其状态。
 - 未分组网页没有标签组覆盖语义，只在“全部”显示；搜索产生标签组查看请求时，实时页先恢复“全部”再消费锚点，避免目标被本地筛选遮挡。
 - `SnapshotLibraryOrganizer` 只在内存中构建标签组版本序列；不修改 schema v1、快照文件或搜索索引。
 - 导航模型把 Chrome 的“现在/快照”和 Safari 的“按需收纳/合集”作为独立页面；资料库列表先按 `sourceKind` 过滤，再执行选择、删除和回落。
@@ -389,6 +399,7 @@ Bridge 连接后持续运行：
 12. Chrome 快照和 Safari 合集的来源字段必须与各自范围一致，不能互相参与覆盖判断、标签组版本序列或浏览器专属动作。
 13. Chrome 或 Safari 专属搜索与专属导出都必须在领域数据集合上过滤，输出中不能出现另一浏览器来源。
 14. 导入预览必须只读；浏览器选择必须在领域层过滤，取消、空选择和任一无效记录都不能产生部分写入。
+15. Chrome 恢复结果必须校验命令、来源与动作；部分完成或超时不得触发自动回滚、清理或重试，Safari 页面不得呈现 Chrome 回执。
 
 ## 12. 可演进边界
 

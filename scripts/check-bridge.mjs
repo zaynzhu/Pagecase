@@ -36,6 +36,17 @@ try {
       windows: []
     }
   }))
+  child.stdin.write(frame({
+    type: "commandResult",
+    commandId: "restore-result-check",
+    sourceId,
+    success: false,
+    message: "Chrome 未能把新标签组成标签组",
+    action: "restoreGroup",
+    createdTabCount: 2,
+    groupCreated: false,
+    failureStage: "groupingTabs"
+  }))
   child.stdin.write(frame({ type: "ping" }))
   child.stdin.end()
 
@@ -50,7 +61,14 @@ try {
   assert.equal(saved.source.id, sourceId)
   assert.equal(saved.source.label, "Chrome · Bridge 检查")
 
-  console.log("PagecaseBridge: 快照落盘与 ping 往返检查通过")
+  const resultFile = path.join(dataRoot, "results", "restore-result-check.json")
+  const result = JSON.parse(await readFile(resultFile, "utf8"))
+  assert.equal(result.action, "restoreGroup")
+  assert.equal(result.createdTabCount, 2)
+  assert.equal(result.groupCreated, false)
+  assert.equal(result.failureStage, "groupingTabs")
+
+  console.log("PagecaseBridge: 快照、结构化结果与 ping 往返检查通过")
 } finally {
   await rm(dataRoot, { recursive: true, force: true })
 }

@@ -7,6 +7,10 @@ public struct NativeInboundMessage: Codable, Sendable {
   public let sourceId: String?
   public let success: Bool?
   public let message: String?
+  public let action: BrowserCommandAction?
+  public let createdTabCount: Int?
+  public let groupCreated: Bool?
+  public let failureStage: BrowserCommandFailureStage?
 
   public init(
     type: String,
@@ -14,7 +18,11 @@ public struct NativeInboundMessage: Codable, Sendable {
     commandId: String? = nil,
     sourceId: String? = nil,
     success: Bool? = nil,
-    message: String? = nil
+    message: String? = nil,
+    action: BrowserCommandAction? = nil,
+    createdTabCount: Int? = nil,
+    groupCreated: Bool? = nil,
+    failureStage: BrowserCommandFailureStage? = nil
   ) {
     self.type = type
     self.payload = payload
@@ -22,6 +30,10 @@ public struct NativeInboundMessage: Codable, Sendable {
     self.sourceId = sourceId
     self.success = success
     self.message = message
+    self.action = action
+    self.createdTabCount = createdTabCount
+    self.groupCreated = groupCreated
+    self.failureStage = failureStage
   }
 }
 

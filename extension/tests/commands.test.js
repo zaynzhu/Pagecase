@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { executeCommand } from "../commands.js"
+import { CommandExecutionError, executeCommand } from "../commands.js"
 
 test("focusTab 只聚焦目标窗口和标签", async () => {
   const calls = []
@@ -23,7 +23,7 @@ test("focusTab 只聚焦目标窗口和标签", async () => {
     api
   )
 
-  assert.equal(result, "已定位到 Chrome 标签")
+  assert.equal(result.message, "已定位到 Chrome 标签")
   assert.deepEqual(calls, [
     ["window", 20, { focused: true }],
     ["tab", 10, { active: true }]
@@ -84,7 +84,11 @@ test("restoreGroup 只分组本次新建的标签并保留顺序", async () => {
     api
   )
 
-  assert.equal(result, "已恢复「开发」，共 2 个网页")
+  assert.deepEqual(result, {
+    message: "已恢复「开发」，共 2 个网页",
+    createdTabCount: 2,
+    groupCreated: true
+  })
   assert.deepEqual(calls, [
     [
       "create",
@@ -103,6 +107,119 @@ test("restoreGroup 只分组本次新建的标签并保留顺序", async () => {
       { title: "开发", color: "blue", collapsed: false }
     ]
   ])
+})
+
+test("restoreGroup 创建中断时报告已确认创建的数量", async () => {
+  let createCount = 0
+  const api = {
+    tabs: {
+      async create() {
+        createCount += 1
+        if (createCount === 2) {
+          throw new Error("模拟创建失败")
+        }
+        return { id: 100 + createCount }
+      }
+    }
+  }
+
+  await assert.rejects(
+    executeCommand(
+      {
+        type: "restoreGroup",
+        groupTitle: "开发",
+        groupColor: "blue",
+        urls: [
+          "https://example.com/first",
+          "https://example.com/second"
+        ]
+      },
+      api
+    ),
+    error => {
+      assert.equal(error instanceof CommandExecutionError, true)
+      assert.equal(error.failureStage, "creatingTabs")
+      assert.equal(error.createdTabCount, 1)
+      assert.equal(error.groupCreated, false)
+      return true
+    }
+  )
+})
+
+test("restoreGroup 分组失败时保留全部新标签并报告部分完成", async () => {
+  let nextTabId = 201
+  const api = {
+    tabs: {
+      async create() {
+        const id = nextTabId
+        nextTabId += 1
+        return { id }
+      },
+      async group() {
+        throw new Error("模拟分组失败")
+      }
+    }
+  }
+
+  await assert.rejects(
+    executeCommand(
+      {
+        type: "restoreGroup",
+        groupTitle: "开发",
+        groupColor: "blue",
+        urls: [
+          "https://example.com/first",
+          "https://example.com/second"
+        ]
+      },
+      api
+    ),
+    error => {
+      assert.equal(error.failureStage, "groupingTabs")
+      assert.equal(error.createdTabCount, 2)
+      assert.equal(error.groupCreated, false)
+      return true
+    }
+  )
+})
+
+test("restoreGroup 样式更新失败时说明标签已经成组", async () => {
+  let nextTabId = 301
+  const api = {
+    tabs: {
+      async create() {
+        const id = nextTabId
+        nextTabId += 1
+        return { id }
+      },
+      async group() {
+        return 88
+      }
+    },
+    tabGroups: {
+      async update() {
+        throw new Error("模拟样式更新失败")
+      }
+    }
+  }
+
+  await assert.rejects(
+    executeCommand(
+      {
+        type: "restoreGroup",
+        groupTitle: "开发",
+        groupColor: "blue",
+        urls: ["https://example.com/first"]
+      },
+      api
+    ),
+    error => {
+      assert.equal(error.failureStage, "updatingGroup")
+      assert.equal(error.createdTabCount, 1)
+      assert.equal(error.groupCreated, true)
+      return true
+    }
+  )
 })
 
 test("未知命令和非 Web 地址会被拒绝", async () => {

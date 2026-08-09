@@ -65,6 +65,11 @@ struct AppNotice: Identifiable, Equatable {
   let message: String
 }
 
+struct PendingBrowserCommand {
+  let command: BrowserCommand
+  let deadline: Date
+}
+
 enum SourceAvailability: Equatable {
   case connected
   case stale
@@ -123,6 +128,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var safariCapture: SafariCapture?
   @Published var pendingLibraryImport: PendingLibraryImport?
   @Published var notice: AppNotice?
+  @Published var chromeRestoreReceipt: GroupRestoreReceipt?
 
   let paths: AppPaths
   let isDemoMode: Bool
@@ -136,7 +142,7 @@ final class AppModel: ObservableObject {
   private let extensionPackageManager: ExtensionPackageManager
   private let displayPreferencesRepository: DisplayPreferencesRepository
   private let safariCapturer: any SafariCapturing
-  private var pendingCommands: [String: Date] = [:]
+  private var pendingCommands: [String: PendingBrowserCommand] = [:]
   private var contentSignature: String?
   private var handledSearchFocusRequest = 0
 
@@ -1144,9 +1150,21 @@ final class AppModel: ObservableObject {
     notice = nil
   }
 
+  func dismissChromeRestoreReceipt() {
+    chromeRestoreReceipt = nil
+  }
+
   private func enqueue(_ command: BrowserCommand, demoMessage: String) {
+    if command.action == .restoreGroup {
+      chromeRestoreReceipt = nil
+    }
+
     if isDemoMode {
-      notice = AppNotice(kind: .warning, message: demoMessage)
+      if command.action == .restoreGroup {
+        showDemoRestoreReceipt(for: command)
+      } else {
+        notice = AppNotice(kind: .warning, message: demoMessage)
+      }
       return
     }
 
@@ -1162,8 +1180,9 @@ final class AppModel: ObservableObject {
 
     do {
       try commandRepository.enqueue(command)
-      pendingCommands[command.id] = Date().addingTimeInterval(
-        command.action == .restoreGroup ? 30 : 3
+      pendingCommands[command.id] = PendingBrowserCommand(
+        command: command,
+        deadline: Date().addingTimeInterval(command.action == .restoreGroup ? 30 : 3)
       )
       notice = AppNotice(kind: .success, message: "命令已发送，等待 Chrome 响应")
     } catch {
@@ -1177,26 +1196,102 @@ final class AppModel: ObservableObject {
     }
 
     let now = Date()
-    for (commandId, deadline) in pendingCommands {
+    for (commandId, pending) in pendingCommands {
       do {
         if let result = try commandRepository.loadResult(commandId: commandId) {
           pendingCommands.removeValue(forKey: commandId)
           try commandRepository.removeResult(commandId: commandId)
-          notice = AppNotice(
-            kind: result.success ? .success : .error,
-            message: result.message
-          )
+          if pending.command.action == .restoreGroup {
+            guard let receipt = GroupRestoreReceiptBuilder.make(
+              command: pending.command,
+              sourceLabel: chromeSourceLabel(for: pending.command.sourceId),
+              result: result
+            ) else {
+              notice = AppNotice(kind: .error, message: "Chrome 返回的恢复结果与原命令不一致")
+              continue
+            }
+            chromeRestoreReceipt = receipt
+            notice = nil
+          } else {
+            notice = AppNotice(
+              kind: result.success ? .success : .error,
+              message: result.message
+            )
+          }
           continue
         }
 
-        if now >= deadline {
+        if now >= pending.deadline {
           pendingCommands.removeValue(forKey: commandId)
-          notice = AppNotice(kind: .warning, message: "Chrome 未及时响应，请检查连接状态")
+          if let receipt = GroupRestoreReceiptBuilder.timeout(
+            command: pending.command,
+            sourceLabel: chromeSourceLabel(for: pending.command.sourceId)
+          ) {
+            chromeRestoreReceipt = receipt
+            notice = nil
+          } else {
+            notice = AppNotice(kind: .warning, message: "Chrome 未及时响应，请检查连接状态")
+          }
         }
       } catch {
         notice = AppNotice(kind: .error, message: "读取命令结果失败：\(error.localizedDescription)")
       }
     }
+  }
+
+  private func showDemoRestoreReceipt(for command: BrowserCommand) {
+    let expectedTabCount = command.urls?.count ?? 0
+    let mode = ProcessInfo.processInfo.environment["PAGECASE_DEMO_RESTORE_RESULT"]
+    if mode == "timeout" {
+      chromeRestoreReceipt = GroupRestoreReceiptBuilder.timeout(
+        command: command,
+        sourceLabel: chromeSourceLabel(for: command.sourceId)
+      )
+      notice = nil
+      return
+    }
+
+    let result: BrowserCommandResult
+    switch mode {
+    case "partial":
+      result = BrowserCommandResult(
+        id: command.id,
+        sourceId: command.sourceId,
+        success: false,
+        message: "Chrome 未能把新标签组成标签组",
+        action: .restoreGroup,
+        createdTabCount: expectedTabCount,
+        groupCreated: false,
+        failureStage: .groupingTabs
+      )
+    case "failure":
+      result = BrowserCommandResult(
+        id: command.id,
+        sourceId: command.sourceId,
+        success: false,
+        message: "Chrome 创建第一个标签时失败",
+        action: .restoreGroup,
+        createdTabCount: 0,
+        groupCreated: false,
+        failureStage: .creatingTabs
+      )
+    default:
+      result = BrowserCommandResult(
+        id: command.id,
+        sourceId: command.sourceId,
+        success: true,
+        message: "恢复演示完成",
+        action: .restoreGroup,
+        createdTabCount: expectedTabCount,
+        groupCreated: true
+      )
+    }
+    chromeRestoreReceipt = GroupRestoreReceiptBuilder.make(
+      command: command,
+      sourceLabel: chromeSourceLabel(for: command.sourceId),
+      result: result
+    )
+    notice = nil
   }
 
   private func localContentSignature() throws -> String {

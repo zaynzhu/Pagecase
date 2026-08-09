@@ -56,7 +56,11 @@ final class BridgeRuntime: @unchecked Sendable {
           id: commandId,
           sourceId: sourceId,
           success: success,
-          message: resultMessage
+          message: resultMessage,
+          action: message.action,
+          createdTabCount: message.createdTabCount,
+          groupCreated: message.groupCreated,
+          failureStage: message.failureStage
         )
       )
     case "ping":

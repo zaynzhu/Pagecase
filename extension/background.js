@@ -1,4 +1,4 @@
-import { executeCommand } from "./commands.js"
+import { CommandExecutionError, executeCommand } from "./commands.js"
 import { buildLiveState, createDebouncer } from "./snapshot.js"
 
 const HOST_NAME = "com.zaynzhu.pagecase"
@@ -48,22 +48,32 @@ async function handleNativeMessage(command) {
   }
 
   try {
-    const message = await executeCommand(command)
+    const result = await executeCommand(command)
     nativePort?.postMessage({
       type: "commandResult",
       commandId: command.commandId,
       sourceId,
       success: true,
-      message
+      action: command.type,
+      ...result
     })
     scheduleCapture()
   } catch (error) {
+    const details = error instanceof CommandExecutionError
+      ? {
+          failureStage: error.failureStage,
+          createdTabCount: error.createdTabCount,
+          groupCreated: error.groupCreated
+        }
+      : {}
     nativePort?.postMessage({
       type: "commandResult",
       commandId: command.commandId,
       sourceId,
       success: false,
-      message: error instanceof Error ? error.message : "命令执行失败"
+      message: error instanceof Error ? error.message : "命令执行失败",
+      action: command.type,
+      ...details
     })
   }
 }

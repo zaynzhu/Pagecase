@@ -57,7 +57,7 @@ For Chrome:
 2. Return to Chrome and close inactive pages or groups yourself to release memory.
 3. Later, search for one page or restore a complete tab group from a snapshot.
 
-Before restoring a group, Pagecase shows the target Chrome source, pages in the snapshot, matching URLs already open, and the number of tabs that will be created. It also warns that memory can rise briefly during restoration. Duplicate URLs are never removed automatically; the connector groups only tabs created by that restore command and never adds an existing tab to the new group.
+Before restoring a group, Pagecase shows the target Chrome source, pages in the snapshot, matching URLs already open, and the number of tabs that will be created. It also warns that memory can rise briefly during restoration. Duplicate URLs are never removed automatically; the connector groups only tabs created by that restore command and never adds an existing tab to the new group. A persistent Chrome-only receipt then distinguishes complete success, partial completion, failure, and timeout. Partial or timed-out restores are never cleaned up or retried automatically.
 
 For Safari:
 
@@ -169,10 +169,13 @@ Press `⌘K` and search by title, domain, URL, tab group, or snapshot name:
 ### Restore a group or delete a snapshot
 
 - Choose “恢复整组” (Restore Group) beside a snapshot group, review its source, matching open URLs, new-tab count, and memory note, then create and group the new tabs in their original order.
+- The restore receipt reports created versus expected tabs, grouping state, and the failure stage. After a partial result or timeout, inspect Chrome first; Pagecase does not roll back or retry automatically.
 - Choose “删除快照” (Delete Snapshot) beside the snapshot title; the matching local file is removed only after confirming its name and page count.
 - Snapshot deletion cannot be undone, but it never closes or changes a page in Chrome.
 
 ![Chrome tab-group restore preview](artifacts/qa-group-restore-preview.png)
+
+![Chrome tab-group restore receipt](artifacts/qa-restore-receipt-success.png)
 
 ---
 
@@ -263,7 +266,7 @@ npm run check:safari
 ./scripts/build-app.sh
 ```
 
-Pagecase 0.6.0 has passed 93 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run.
+Pagecase 0.6.0 has passed 98 Swift core behavior checks, 13 extension tests, the structured Bridge result round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run.
 
 > [!NOTE]
 > A Command Line Tools-only environment cannot enumerate Swift Testing tests correctly. `swift test` still compiles the test package, while `PagecaseCoreChecks` executes the same critical behavior checks.

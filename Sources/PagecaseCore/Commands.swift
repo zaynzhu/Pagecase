@@ -6,6 +6,13 @@ public enum BrowserCommandAction: String, Codable, Sendable {
   case restoreGroup
 }
 
+public enum BrowserCommandFailureStage: String, Codable, Sendable {
+  case validation
+  case creatingTabs
+  case groupingTabs
+  case updatingGroup
+}
+
 public struct BrowserCommand: Codable, Equatable, Identifiable, Sendable {
   public let schemaVersion: Int
   public let id: String
@@ -99,6 +106,10 @@ public struct BrowserCommandResult: Codable, Equatable, Identifiable, Sendable {
   public let sourceId: String
   public let success: Bool
   public let message: String
+  public let action: BrowserCommandAction?
+  public let createdTabCount: Int?
+  public let groupCreated: Bool?
+  public let failureStage: BrowserCommandFailureStage?
   public let completedAt: Date
 
   public init(
@@ -107,6 +118,10 @@ public struct BrowserCommandResult: Codable, Equatable, Identifiable, Sendable {
     sourceId: String,
     success: Bool,
     message: String,
+    action: BrowserCommandAction? = nil,
+    createdTabCount: Int? = nil,
+    groupCreated: Bool? = nil,
+    failureStage: BrowserCommandFailureStage? = nil,
     completedAt: Date = Date()
   ) {
     self.schemaVersion = schemaVersion
@@ -114,6 +129,10 @@ public struct BrowserCommandResult: Codable, Equatable, Identifiable, Sendable {
     self.sourceId = sourceId
     self.success = success
     self.message = message
+    self.action = action
+    self.createdTabCount = createdTabCount
+    self.groupCreated = groupCreated
+    self.failureStage = failureStage
     self.completedAt = completedAt
   }
 }

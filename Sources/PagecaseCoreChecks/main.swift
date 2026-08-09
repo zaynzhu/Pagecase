@@ -881,6 +881,98 @@ func runChecks() throws -> Int {
     "恢复整组命令往返失败"
   )
 
+  let successResult = BrowserCommandResult(
+    id: restoreCommand.id,
+    sourceId: restoreCommand.sourceId,
+    success: true,
+    message: "已恢复",
+    action: .restoreGroup,
+    createdTabCount: 2,
+    groupCreated: true
+  )
+  let successReceipt = GroupRestoreReceiptBuilder.make(
+    command: restoreCommand,
+    sourceLabel: "Chrome · 日常",
+    result: successResult
+  )
+  passed += try check(
+    successReceipt?.status == .success
+      && successReceipt?.createdTabCount == 2
+      && successReceipt?.groupCreated == true,
+    "完整恢复结果没有生成成功回执"
+  )
+  let partialResult = BrowserCommandResult(
+    id: restoreCommand.id,
+    sourceId: restoreCommand.sourceId,
+    success: false,
+    message: "Chrome 未能把新标签组成标签组",
+    action: .restoreGroup,
+    createdTabCount: 2,
+    groupCreated: false,
+    failureStage: .groupingTabs
+  )
+  let partialReceipt = GroupRestoreReceiptBuilder.make(
+    command: restoreCommand,
+    sourceLabel: "Chrome · 日常",
+    result: partialResult
+  )
+  passed += try check(
+    partialReceipt?.status == .partial
+      && partialReceipt?.summary.contains("2 / 2") == true
+      && partialReceipt?.guidance.contains("不会自动清理或重试") == true,
+    "部分恢复结果没有保留已创建数量与不重试边界"
+  )
+  let timeoutReceipt = GroupRestoreReceiptBuilder.timeout(
+    command: restoreCommand,
+    sourceLabel: "Chrome · 日常"
+  )
+  passed += try check(
+    timeoutReceipt?.status == .timeout
+      && timeoutReceipt?.createdTabCount == nil
+      && timeoutReceipt?.guidance.contains("不会自动重试") == true,
+    "恢复超时没有生成防重复提示"
+  )
+  let wrongSourceResult = BrowserCommandResult(
+    id: restoreCommand.id,
+    sourceId: "other-source",
+    success: true,
+    message: "不应接收",
+    action: .restoreGroup,
+    createdTabCount: 2,
+    groupCreated: true
+  )
+  passed += try check(
+    GroupRestoreReceiptBuilder.make(
+      command: restoreCommand,
+      sourceLabel: "Chrome",
+      result: wrongSourceResult
+    ) == nil,
+    "其他 Chrome 来源的结果被错误接收"
+  )
+  let inboundResult = NativeInboundMessage(
+    type: "commandResult",
+    commandId: restoreCommand.id,
+    sourceId: restoreCommand.sourceId,
+    success: false,
+    message: "分组失败",
+    action: .restoreGroup,
+    createdTabCount: 2,
+    groupCreated: false,
+    failureStage: .groupingTabs
+  )
+  let inboundFramed = try NativeMessageFramer.encode(inboundResult)
+  let decodedInbound = try NativeMessageFramer.decode(
+    NativeInboundMessage.self,
+    from: inboundFramed
+  )
+  passed += try check(
+    decodedInbound.action == .restoreGroup
+      && decodedInbound.createdTabCount == 2
+      && decodedInbound.groupCreated == false
+      && decodedInbound.failureStage == .groupingTabs,
+    "结构化恢复结果往返失败"
+  )
+
   do {
     try BrowserCommand(
       sourceId: "source",

@@ -1352,6 +1352,152 @@ func commandLifecycle() throws {
 }
 
 @Test
+func groupRestoreReceiptReportsCompleteAndLegacySuccess() throws {
+  let command = BrowserCommand(
+    id: "receipt-success",
+    sourceId: "source",
+    action: .restoreGroup,
+    groupTitle: "开发",
+    groupColor: .blue,
+    urls: [
+      "https://example.com/first",
+      "https://example.com/second"
+    ]
+  )
+  let structuredResult = BrowserCommandResult(
+    id: command.id,
+    sourceId: command.sourceId,
+    success: true,
+    message: "已恢复",
+    action: .restoreGroup,
+    createdTabCount: 2,
+    groupCreated: true
+  )
+  let receipt = try #require(
+    GroupRestoreReceiptBuilder.make(
+      command: command,
+      sourceLabel: "Chrome · 日常",
+      result: structuredResult
+    )
+  )
+
+  #expect(receipt.status == .success)
+  #expect(receipt.createdTabCount == 2)
+  #expect(receipt.groupCreated == true)
+  #expect(receipt.title == "「开发」已恢复")
+  #expect(receipt.summary == "2 个标签已创建并组成标签组")
+
+  let legacyResult = BrowserCommandResult(
+    id: command.id,
+    sourceId: command.sourceId,
+    success: true,
+    message: "旧版扩展恢复成功"
+  )
+  let legacyReceipt = try #require(
+    GroupRestoreReceiptBuilder.make(
+      command: command,
+      sourceLabel: "Chrome · 日常",
+      result: legacyResult
+    )
+  )
+  #expect(legacyReceipt.status == .success)
+  #expect(legacyReceipt.createdTabCount == 2)
+  #expect(legacyReceipt.groupCreated == true)
+}
+
+@Test
+func groupRestoreReceiptDistinguishesPartialFailureAndTimeout() throws {
+  let command = BrowserCommand(
+    id: "receipt-partial",
+    sourceId: "source",
+    action: .restoreGroup,
+    groupTitle: "研究",
+    groupColor: .green,
+    urls: [
+      "https://example.com/first",
+      "https://example.com/second"
+    ]
+  )
+  let result = BrowserCommandResult(
+    id: command.id,
+    sourceId: command.sourceId,
+    success: false,
+    message: "Chrome 未能把新标签组成标签组",
+    action: .restoreGroup,
+    createdTabCount: 2,
+    groupCreated: false,
+    failureStage: .groupingTabs
+  )
+  let receipt = try #require(
+    GroupRestoreReceiptBuilder.make(
+      command: command,
+      sourceLabel: "Chrome · 研究",
+      result: result
+    )
+  )
+
+  #expect(receipt.status == .partial)
+  #expect(receipt.failureStage == .groupingTabs)
+  #expect(receipt.summary == "已确认创建 2 / 2 个标签，尚未完整成组")
+  #expect(receipt.guidance.contains("不会自动清理或重试"))
+
+  let timeout = try #require(
+    GroupRestoreReceiptBuilder.timeout(
+      command: command,
+      sourceLabel: "Chrome · 研究"
+    )
+  )
+  #expect(timeout.status == .timeout)
+  #expect(timeout.createdTabCount == nil)
+  #expect(timeout.groupCreated == nil)
+  #expect(timeout.guidance.contains("不会自动重试"))
+}
+
+@Test
+func groupRestoreReceiptRejectsAnotherSourceOrAction() {
+  let command = BrowserCommand(
+    id: "receipt-boundary",
+    sourceId: "source",
+    action: .restoreGroup,
+    groupTitle: "边界",
+    groupColor: .grey,
+    urls: ["https://example.com"]
+  )
+  let wrongSource = BrowserCommandResult(
+    id: command.id,
+    sourceId: "other-source",
+    success: true,
+    message: "不应接收",
+    action: .restoreGroup,
+    createdTabCount: 1,
+    groupCreated: true
+  )
+  let wrongAction = BrowserCommandResult(
+    id: command.id,
+    sourceId: command.sourceId,
+    success: true,
+    message: "不应接收",
+    action: .openUrl,
+    createdTabCount: 1
+  )
+
+  #expect(
+    GroupRestoreReceiptBuilder.make(
+      command: command,
+      sourceLabel: "Chrome",
+      result: wrongSource
+    ) == nil
+  )
+  #expect(
+    GroupRestoreReceiptBuilder.make(
+      command: command,
+      sourceLabel: "Chrome",
+      result: wrongAction
+    ) == nil
+  )
+}
+
+@Test
 func nativeMessageRoundTripAndLengthValidation() throws {
   let message = NativeOutboundMessage(type: "pong")
   let framed = try NativeMessageFramer.encode(message)
@@ -1377,6 +1523,27 @@ func nativeMessageRoundTripAndLengthValidation() throws {
   #expect(restoreDecoded.groupTitle == "开发")
   #expect(restoreDecoded.groupColor == "blue")
   #expect(restoreDecoded.urls == ["https://example.com"])
+
+  let resultMessage = NativeInboundMessage(
+    type: "commandResult",
+    commandId: "result-id",
+    sourceId: "source",
+    success: false,
+    message: "Chrome 未能把新标签组成标签组",
+    action: .restoreGroup,
+    createdTabCount: 2,
+    groupCreated: false,
+    failureStage: .groupingTabs
+  )
+  let resultFramed = try NativeMessageFramer.encode(resultMessage)
+  let resultDecoded = try NativeMessageFramer.decode(
+    NativeInboundMessage.self,
+    from: resultFramed
+  )
+  #expect(resultDecoded.action == .restoreGroup)
+  #expect(resultDecoded.createdTabCount == 2)
+  #expect(resultDecoded.groupCreated == false)
+  #expect(resultDecoded.failureStage == .groupingTabs)
 
   var invalid = framed
   invalid.removeLast()
