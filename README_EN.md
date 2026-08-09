@@ -37,7 +37,7 @@ Let pages leave memory, not your reach.
 - **On-demand Safari capture** — Reads the front Safari window only after a click, previews it, and saves a local collection without a Safari extension, full Xcode, or background monitoring.
 - **Explicit browser separation** — Sidebar sections, libraries, counts, icons, and actions distinguish Chrome from Safari; mixed search results still identify their browser.
 - **Full-state or group snapshots** — Save the complete Chrome state or one tab group; neither is overwritten by later Chrome changes.
-- **Safe-to-close status** — Shows snapshot coverage for the complete live state and each tab group, including the number of newly unsaved pages.
+- **Safe-to-close status** — Shows full-state and per-group coverage with an explicit All / Needs Saving / Collected switch.
 - **Fast page and group retrieval** — Searches titles, domains, full URLs, tab groups, and snapshot names with an explicit All / Chrome / Safari scope; groups remain first-class results.
 - **Restore on demand** — Focuses a page still open in Chrome, opens one page from a snapshot, or restores a complete tab group in order.
 - **Preserved context** — Keeps windows, group names, colors, order, and duplicate URLs instead of merging identical URLs from different contexts.
@@ -53,7 +53,7 @@ Pagecase solves the fear of losing pages after closing them. It never cleans up 
 
 For Chrome:
 
-1. In “Live,” save the complete state or just the tab group you plan to close.
+1. In “Live,” switch to Needs Saving and save the groups you plan to close, or save the complete state.
 2. Return to Chrome and close inactive pages or groups yourself to release memory.
 3. Later, search for one page or restore a complete tab group from a snapshot.
 
@@ -118,6 +118,18 @@ Each tab group shows its own saved state:
 A group snapshot preserves the group name, color, page order, and duplicate URLs. Complete-state coverage is evaluated only against full-state snapshots, so one saved group is never presented as proof that all of Chrome has been saved.
 
 ![Tab group save states](artifacts/qa-group-save-states.png)
+
+### Filter the next groups to collect
+
+The Live page summarizes collected groups and provides three flat filters:
+
+- All preserves the original window structure and keeps ungrouped pages visible.
+- Needs Saving shows only groups that are not fully covered by a local snapshot. A successfully saved group leaves this view immediately.
+- Collected shows only groups whose current contents are completely present in a local snapshot, with direct access to that snapshot.
+
+Collected never means that Pagecase may close the group. After verifying the snapshot, you still return to Chrome and close inactive groups yourself. Opening a hidden group from search resets this filter to All before Pagecase reveals the target.
+
+![Chrome tab group collection filters](artifacts/qa-group-readiness.png)
 
 ### Browse earlier group versions
 

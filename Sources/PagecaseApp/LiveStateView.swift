@@ -13,61 +13,129 @@ private struct GroupSaveTarget: Identifiable {
   }
 }
 
+private struct LiveGroupKey: Hashable {
+  let windowId: Int
+  let groupId: Int
+}
+
+private enum LiveGroupFilter: CaseIterable {
+  case all
+  case needsSaving
+  case archived
+
+  var title: String {
+    switch self {
+    case .all:
+      return "全部"
+    case .needsSaving:
+      return "需保存"
+    case .archived:
+      return "已收纳"
+    }
+  }
+
+  var symbol: String {
+    switch self {
+    case .all:
+      return "rectangle.stack"
+    case .needsSaving:
+      return "exclamationmark.circle"
+    case .archived:
+      return "checkmark.circle.fill"
+    }
+  }
+}
+
+private struct LiveGroupReadinessSummary {
+  let totalCount: Int
+  let archivedCount: Int
+
+  var needsSavingCount: Int {
+    max(totalCount - archivedCount, 0)
+  }
+
+  func count(for filter: LiveGroupFilter) -> Int {
+    switch filter {
+    case .all:
+      return totalCount
+    case .needsSaving:
+      return needsSavingCount
+    case .archived:
+      return archivedCount
+    }
+  }
+}
+
 struct LiveStateView: View {
   @ObservedObject var model: AppModel
   @Environment(\.colorScheme) private var colorScheme
   @State private var showingSaveSheet = false
   @State private var groupSaveTarget: GroupSaveTarget?
+  @State private var groupFilter = LiveGroupFilter.all
 
   var body: some View {
     Group {
       if let state = model.selectedLiveState {
+        let groupCoverages = groupCoverages(in: state)
+        let groupReadiness = groupReadinessSummary(groupCoverages)
+
         ScrollViewReader { proxy in
           ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
               header(state)
+              groupReadinessToolbar(groupReadiness)
 
-              ForEach(state.windows) { window in
-                WindowSection(
-                  window: window,
-                  action: { page in
-                    model.focus(page: page, sourceId: state.source.id)
-                  },
-                  actionTitle: model.liveActionTitle(for: state.source.id),
-                  actionEnabled: model.isSourceActionAvailable(state.source.id),
-                  isGroupExpanded: { groupId in
-                    model.isGroupExpanded(
-                      scope: "live:\(state.source.id)",
-                      windowId: window.id,
-                      groupId: groupId
-                    )
-                  },
-                  toggleGroupExpansion: { groupId in
-                    model.toggleGroupExpansion(
-                      scope: "live:\(state.source.id)",
-                      windowId: window.id,
-                      groupId: groupId
-                    )
-                  },
-                  groupCoverage: { group in
-                    SnapshotCoverageEvaluator.evaluate(
-                      group: group,
-                      sourceId: state.source.id,
-                      snapshots: model.snapshots
-                    )
-                  },
-                  groupActionTitle: { group in
-                    groupActionTitle(for: group, sourceId: state.source.id)
-                  },
-                  groupActionEnabled: { _ in true },
-                  groupAction: { group in
-                    handleGroupAction(
-                      group,
-                      windowId: window.id,
-                      sourceId: state.source.id
-                    )
-                  }
-                )
+              let windows = filteredWindows(
+                in: state,
+                groupCoverages: groupCoverages
+              )
+              if windows.isEmpty {
+                groupFilterEmptyState(groupReadiness)
+              } else {
+                ForEach(windows) { window in
+                  WindowSection(
+                    window: window,
+                    action: { page in
+                      model.focus(page: page, sourceId: state.source.id)
+                    },
+                    actionTitle: model.liveActionTitle(for: state.source.id),
+                    actionEnabled: model.isSourceActionAvailable(state.source.id),
+                    isGroupExpanded: { groupId in
+                      model.isGroupExpanded(
+                        scope: "live:\(state.source.id)",
+                        windowId: window.id,
+                        groupId: groupId
+                      )
+                    },
+                    toggleGroupExpansion: { groupId in
+                      model.toggleGroupExpansion(
+                        scope: "live:\(state.source.id)",
+                        windowId: window.id,
+                        groupId: groupId
+                      )
+                    },
+                    groupCoverage: { group in
+                      groupCoverages[
+                        LiveGroupKey(windowId: window.id, groupId: group.id)
+                      ]
+                    },
+                    groupActionTitle: { group in
+                      groupActionTitle(
+                        for: groupCoverages[
+                          LiveGroupKey(windowId: window.id, groupId: group.id)
+                        ]
+                      )
+                    },
+                    groupActionEnabled: { _ in true },
+                    groupAction: { group in
+                      handleGroupAction(
+                        group,
+                        windowId: window.id,
+                        sourceId: state.source.id
+                      )
+                    }
+                  )
+                }
               }
             }
             .padding(.horizontal, 28)
@@ -80,6 +148,7 @@ struct LiveStateView: View {
             focusRequestedGroup(state: state, using: proxy)
           }
           .onChange(of: model.groupFocusRequest) { _, _ in
+            groupFilter = .all
             focusRequestedGroup(state: state, using: proxy)
           }
         }
@@ -192,6 +261,216 @@ struct LiveStateView: View {
       : Color(red: 0.63, green: 0.43, blue: 0.08)
   }
 
+  private func groupReadinessToolbar(_ summary: LiveGroupReadinessSummary) -> some View {
+    return VStack(alignment: .leading, spacing: 12) {
+      ViewThatFits(in: .horizontal) {
+        HStack(alignment: .bottom, spacing: 24) {
+          groupReadinessCopy(summary)
+
+          Spacer()
+
+          groupFilterControls(summary)
+        }
+
+        VStack(alignment: .leading, spacing: 10) {
+          groupReadinessCopy(summary)
+          groupFilterControls(summary)
+        }
+      }
+
+      Divider()
+    }
+  }
+
+  private func groupReadinessCopy(_ summary: LiveGroupReadinessSummary) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text(summary.totalCount == 0
+        ? "当前没有 Chrome 标签组"
+        : "\(summary.archivedCount) / \(summary.totalCount) 个标签组已收纳")
+        .font(.system(size: 12, weight: .semibold))
+
+      Text("已收纳表示当前内容完整保存在本地快照；关闭仍由你在 Chrome 手动完成。")
+        .font(.system(size: 10))
+        .foregroundStyle(Palette.muted(colorScheme))
+    }
+  }
+
+  private func groupFilterControls(_ summary: LiveGroupReadinessSummary) -> some View {
+    HStack(spacing: 0) {
+      ForEach(LiveGroupFilter.allCases, id: \.self) { filter in
+        Button {
+          groupFilter = filter
+        } label: {
+          HStack(spacing: 6) {
+            Image(systemName: filter.symbol)
+              .font(.system(size: 9, weight: .semibold))
+              .accessibilityHidden(true)
+
+            Text(filter.title)
+              .font(.system(size: 11, weight: .semibold))
+
+            Text("\(summary.count(for: filter))")
+              .font(.system(size: 9, design: .monospaced))
+              .opacity(0.75)
+          }
+          .foregroundStyle(groupFilterColor(filter))
+          .padding(.horizontal, 11)
+          .frame(height: 34)
+          .contentShape(Rectangle())
+          .overlay(alignment: .bottom) {
+            Rectangle()
+              .fill(groupFilterColor(filter))
+              .frame(height: groupFilter == filter ? 2 : 0)
+          }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("只显示\(filter.title)的 Chrome 标签组，共 \(summary.count(for: filter)) 个")
+        .accessibilityAddTraits(groupFilter == filter ? .isSelected : [])
+      }
+    }
+  }
+
+  private func groupCoverages(
+    in state: LiveState
+  ) -> [LiveGroupKey: GroupSnapshotCoverage] {
+    var result: [LiveGroupKey: GroupSnapshotCoverage] = [:]
+    for window in state.windows {
+      for group in window.groups {
+        result[LiveGroupKey(windowId: window.id, groupId: group.id)] = groupCoverage(
+          group,
+          sourceId: state.source.id
+        )
+      }
+    }
+    return result
+  }
+
+  private func groupReadinessSummary(
+    _ groupCoverages: [LiveGroupKey: GroupSnapshotCoverage]
+  ) -> LiveGroupReadinessSummary {
+    let archivedCount = groupCoverages.values.filter(\.isComplete).count
+    return LiveGroupReadinessSummary(
+      totalCount: groupCoverages.count,
+      archivedCount: archivedCount
+    )
+  }
+
+  private func filteredWindows(
+    in state: LiveState,
+    groupCoverages: [LiveGroupKey: GroupSnapshotCoverage]
+  ) -> [BrowserWindow] {
+    guard groupFilter != .all else {
+      return state.windows
+    }
+
+    return state.windows.compactMap { window in
+      let groups = window.groups.filter { group in
+        let key = LiveGroupKey(windowId: window.id, groupId: group.id)
+        let isArchived = groupCoverages[key]?.isComplete == true
+        switch groupFilter {
+        case .all:
+          return true
+        case .needsSaving:
+          return !isArchived
+        case .archived:
+          return isArchived
+        }
+      }
+      guard !groups.isEmpty else {
+        return nil
+      }
+      return BrowserWindow(
+        id: window.id,
+        order: window.order,
+        focused: window.focused,
+        groups: groups,
+        ungroupedTabs: []
+      )
+    }
+  }
+
+  private func groupFilterEmptyState(
+    _ summary: LiveGroupReadinessSummary
+  ) -> some View {
+    let content: (symbol: String, title: String, message: String, color: Color)
+
+    if summary.totalCount == 0 {
+      content = (
+        "rectangle.stack",
+        "当前没有标签组",
+        "未分组网页仍可在“全部”中查看和保存完整现场。",
+        Palette.muted(colorScheme)
+      )
+    } else {
+      switch groupFilter {
+      case .all:
+        content = (
+          "rectangle.stack",
+          "当前没有网页",
+          "Chrome 中出现普通网页后，页匣会在这里显示。",
+          Palette.muted(colorScheme)
+        )
+      case .needsSaving:
+        content = (
+          "checkmark.circle.fill",
+          "所有标签组都已收纳",
+          "确认快照可用后，你可以回到 Chrome 手动关闭不常用的标签组。",
+          archivedColor
+        )
+      case .archived:
+        content = (
+          "archivebox",
+          "还没有已收纳的标签组",
+          "切换到“需保存”，逐组保存后再决定是否在 Chrome 中关闭。",
+          needsSavingColor
+        )
+      }
+    }
+
+    return VStack(spacing: 10) {
+      Image(systemName: content.symbol)
+        .font(.system(size: 22, weight: .medium))
+        .foregroundStyle(content.color)
+        .accessibilityHidden(true)
+
+      Text(content.title)
+        .font(.system(size: 14, weight: .semibold))
+
+      Text(content.message)
+        .font(.system(size: 11))
+        .foregroundStyle(Palette.muted(colorScheme))
+        .multilineTextAlignment(.center)
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 62)
+  }
+
+  private func groupFilterColor(_ filter: LiveGroupFilter) -> Color {
+    guard groupFilter == filter else {
+      return Palette.muted(colorScheme)
+    }
+    switch filter {
+    case .all:
+      return Palette.ink(colorScheme)
+    case .needsSaving:
+      return needsSavingColor
+    case .archived:
+      return archivedColor
+    }
+  }
+
+  private var needsSavingColor: Color {
+    colorScheme == .dark
+      ? Color(red: 0.88, green: 0.70, blue: 0.34)
+      : Color(red: 0.63, green: 0.43, blue: 0.08)
+  }
+
+  private var archivedColor: Color {
+    colorScheme == .dark
+      ? Color(red: 0.49, green: 0.75, blue: 0.52)
+      : Color(red: 0.20, green: 0.49, blue: 0.25)
+  }
+
   private func defaultSnapshotName(_ state: LiveState) -> String {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "zh_CN")
@@ -206,12 +485,12 @@ struct LiveStateView: View {
     return "\(target.groupTitle) · \(formatter.string(from: Date())) · \(target.pageCount) 个网页"
   }
 
-  private func groupActionTitle(for group: TabGroup, sourceId: String) -> String {
-    let coverage = SnapshotCoverageEvaluator.evaluate(
-      group: group,
-      sourceId: sourceId,
-      snapshots: model.snapshots
-    )
+  private func groupActionTitle(
+    for coverage: GroupSnapshotCoverage?
+  ) -> String? {
+    guard let coverage else {
+      return nil
+    }
     if coverage.isComplete {
       return "查看快照"
     }
@@ -223,11 +502,7 @@ struct LiveStateView: View {
     windowId: Int,
     sourceId: String
   ) {
-    let coverage = SnapshotCoverageEvaluator.evaluate(
-      group: group,
-      sourceId: sourceId,
-      snapshots: model.snapshots
-    )
+    let coverage = groupCoverage(group, sourceId: sourceId)
     if coverage.isComplete {
       model.showSavedGroup(coverage)
       return
@@ -242,15 +517,26 @@ struct LiveStateView: View {
     )
   }
 
+  private func groupCoverage(
+    _ group: TabGroup,
+    sourceId: String
+  ) -> GroupSnapshotCoverage {
+    SnapshotCoverageEvaluator.evaluate(
+      group: group,
+      sourceId: sourceId,
+      snapshots: model.snapshots
+    )
+  }
+
   private func focusRequestedGroup(
     state: LiveState,
     using proxy: ScrollViewProxy
   ) {
     let scope = "live:\(state.source.id)"
-    guard let request = model.consumeGroupFocusRequest(scope: scope) else {
-      return
-    }
     DispatchQueue.main.async {
+      guard let request = model.consumeGroupFocusRequest(scope: scope) else {
+        return
+      }
       proxy.scrollTo(request.anchorId, anchor: .center)
     }
   }
@@ -498,7 +784,7 @@ struct PageGroupView: View {
 
   private func groupCoverageMessage(_ coverage: GroupSnapshotCoverage) -> String {
     if coverage.isComplete {
-      return "已保存"
+      return "已收纳"
     }
     if coverage.snapshot != nil {
       return "\(coverage.uncoveredPageCount) 个未保存"
