@@ -68,7 +68,7 @@ struct RootView: View {
           .transition(.move(edge: .top).combined(with: .opacity))
         }
 
-        if let notice = model.notice {
+        if let notice = model.notice, shouldShowNotice(notice) {
           NoticeView(notice: notice) {
             model.dismissNotice()
           }
@@ -223,6 +223,16 @@ struct RootView: View {
       return false
     }
     return !isSearchActive || model.searchBrowserFilter != .safari
+  }
+
+  private func shouldShowNotice(_ notice: AppNotice) -> Bool {
+    guard let browserKind = notice.browserKind else {
+      return true
+    }
+    if isSearchActive {
+      return model.searchBrowserFilter.includes(browserKind)
+    }
+    return model.selection.browserKind == browserKind
   }
 
   private var footer: some View {

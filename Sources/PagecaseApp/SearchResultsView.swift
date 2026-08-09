@@ -182,7 +182,9 @@ struct SearchResultsView: View {
 
       Text(actionTitle)
         .font(.system(size: 11, weight: .semibold))
-        .frame(width: 52, alignment: .trailing)
+        .foregroundStyle(result.sourceKind.accentColor)
+        .lineLimit(1)
+        .frame(width: 88, alignment: .trailing)
     }
     .padding(.horizontal, 12)
     .frame(maxWidth: .infinity)
@@ -264,7 +266,11 @@ struct SearchResultsView: View {
     model.selectSearchResult(result)
     guard let snapshotId = result.snapshotId,
           let group = model.searchGroup(for: result) else {
-      model.notice = AppNotice(kind: .warning, message: "这个标签组已经不在当前快照中")
+      model.notice = AppNotice(
+        kind: .warning,
+        message: "这个标签组已经不在当前快照中",
+        browserKind: .chrome
+      )
       return
     }
     restoreTarget = GroupRestoreTarget(

@@ -232,9 +232,21 @@ struct NoticeView: View {
       Image(systemName: symbol)
         .foregroundStyle(symbolColor)
 
-      Text(notice.message)
-        .font(.system(size: 12, weight: .medium))
-        .lineLimit(2)
+      VStack(alignment: .leading, spacing: 2) {
+        if let browserKind = notice.browserKind {
+          HStack(spacing: 4) {
+            Image(systemName: browserKind.symbol)
+              .font(.system(size: 8, weight: .semibold))
+            Text(browserKind.displayName.uppercased())
+              .font(.system(size: 8, weight: .semibold, design: .monospaced))
+          }
+          .foregroundStyle(browserKind.accentColor)
+        }
+
+        Text(notice.message)
+          .font(.system(size: 12, weight: .medium))
+          .lineLimit(2)
+      }
 
       Button(action: dismiss) {
         Image(systemName: "xmark")
@@ -244,7 +256,7 @@ struct NoticeView: View {
       .accessibilityLabel("关闭提示")
     }
     .padding(.horizontal, 13)
-    .frame(minHeight: 40)
+    .frame(minHeight: notice.browserKind == nil ? 40 : 48)
     .background(Palette.surface(colorScheme))
     .clipShape(RoundedRectangle(cornerRadius: 8))
     .overlay {

@@ -63,6 +63,17 @@ struct AppNotice: Identifiable, Equatable {
   let id = UUID()
   let kind: Kind
   let message: String
+  let browserKind: BrowserKind?
+
+  init(
+    kind: Kind,
+    message: String,
+    browserKind: BrowserKind? = nil
+  ) {
+    self.kind = kind
+    self.message = message
+    self.browserKind = browserKind
+  }
 }
 
 struct PendingBrowserCommand {
@@ -476,7 +487,7 @@ final class AppModel: ObservableObject {
       return liveActionTitle(for: result.sourceId)
     case .snapshot:
       if result.sourceKind == .safari {
-        return "在 Safari 打开"
+        return "Safari 打开"
       }
       return isSourceActionAvailable(result.sourceId) ? "打开" : "Chrome 未连接"
     }
@@ -547,7 +558,11 @@ final class AppModel: ObservableObject {
 
   func createSnapshot(name: String) -> Bool {
     guard let state = selectedLiveState, let snapshotRepository else {
-      notice = AppNotice(kind: .warning, message: "当前没有可以保存的 Chrome 现场")
+      notice = AppNotice(
+        kind: .warning,
+        message: "当前没有可以保存的 Chrome 现场",
+        browserKind: .chrome
+      )
       return false
     }
 
@@ -557,11 +572,12 @@ final class AppModel: ObservableObject {
       refresh(force: true)
       notice = AppNotice(
         kind: .success,
-        message: "已从磁盘核对保存 \(snapshot.tabCount) 个网页、\(snapshot.groupCount) 个标签组，Chrome 保持不变"
+        message: "已从磁盘核对保存 \(snapshot.tabCount) 个网页、\(snapshot.groupCount) 个标签组，Chrome 保持不变",
+        browserKind: .chrome
       )
       return true
     } catch {
-      notice = AppNotice(kind: .error, message: error.localizedDescription)
+      notice = AppNotice(kind: .error, message: error.localizedDescription, browserKind: .chrome)
       return false
     }
   }
@@ -576,7 +592,11 @@ final class AppModel: ObservableObject {
           let window = state.windows.first(where: { $0.id == windowId }),
           let group = window.groups.first(where: { $0.id == groupId }),
           let snapshotRepository else {
-      notice = AppNotice(kind: .warning, message: "这个标签组已经不在当前 Chrome 现场中")
+      notice = AppNotice(
+        kind: .warning,
+        message: "这个标签组已经不在当前 Chrome 现场中",
+        browserKind: .chrome
+      )
       return false
     }
 
@@ -592,11 +612,12 @@ final class AppModel: ObservableObject {
       refresh(force: true)
       notice = AppNotice(
         kind: .success,
-        message: "已从磁盘核对保存「\(group.displayTitle)」的 \(snapshot.tabCount) 个网页，Chrome 保持不变"
+        message: "已从磁盘核对保存「\(group.displayTitle)」的 \(snapshot.tabCount) 个网页，Chrome 保持不变",
+        browserKind: .chrome
       )
       return true
     } catch {
-      notice = AppNotice(kind: .error, message: error.localizedDescription)
+      notice = AppNotice(kind: .error, message: error.localizedDescription, browserKind: .chrome)
       return false
     }
   }
@@ -609,11 +630,12 @@ final class AppModel: ObservableObject {
         kind: skipped > 0 ? .warning : .success,
         message: skipped > 0
           ? "已读取 \(safariCapture?.pages.count ?? 0) 个网页，并忽略 \(skipped) 个非网页标签"
-          : "已读取 Safari 当前窗口的 \(safariCapture?.pages.count ?? 0) 个网页"
+          : "已读取 Safari 当前窗口的 \(safariCapture?.pages.count ?? 0) 个网页",
+        browserKind: .safari
       )
     } catch {
       safariCapture = nil
-      notice = AppNotice(kind: .error, message: error.localizedDescription)
+      notice = AppNotice(kind: .error, message: error.localizedDescription, browserKind: .safari)
     }
   }
 
@@ -623,7 +645,11 @@ final class AppModel: ObservableObject {
 
   func saveSafariCollection(name: String) -> Bool {
     guard let safariCapture, let snapshotRepository else {
-      notice = AppNotice(kind: .warning, message: "请先读取 Safari 当前窗口")
+      notice = AppNotice(
+        kind: .warning,
+        message: "请先读取 Safari 当前窗口",
+        browserKind: .safari
+      )
       return false
     }
 
@@ -638,11 +664,12 @@ final class AppModel: ObservableObject {
       selectNavigation(.safariLibrary)
       notice = AppNotice(
         kind: .success,
-        message: "已从磁盘核对保存 \(snapshot.tabCount) 个 Safari 网页，Safari 保持不变"
+        message: "已从磁盘核对保存 \(snapshot.tabCount) 个 Safari 网页，Safari 保持不变",
+        browserKind: .safari
       )
       return true
     } catch {
-      notice = AppNotice(kind: .error, message: error.localizedDescription)
+      notice = AppNotice(kind: .error, message: error.localizedDescription, browserKind: .safari)
       return false
     }
   }
@@ -652,7 +679,11 @@ final class AppModel: ObservableObject {
           let snapshot = coverage.snapshot,
           let windowId = coverage.windowId,
           let groupId = coverage.groupId else {
-      notice = AppNotice(kind: .warning, message: "暂时找不到这个标签组对应的快照")
+      notice = AppNotice(
+        kind: .warning,
+        message: "暂时找不到这个标签组对应的快照",
+        browserKind: .chrome
+      )
       return
     }
 
@@ -664,7 +695,11 @@ final class AppModel: ObservableObject {
           let windowId = result.windowId,
           let groupId = result.groupId,
           searchGroup(for: result) != nil else {
-      notice = AppNotice(kind: .warning, message: "这个标签组已经不在当前资料中")
+      notice = AppNotice(
+        kind: .warning,
+        message: "这个标签组已经不在当前资料中",
+        browserKind: result.sourceKind
+      )
       return
     }
 
@@ -683,7 +718,11 @@ final class AppModel: ObservableObject {
       )
     case .snapshot:
       guard let snapshotId = result.snapshotId else {
-        notice = AppNotice(kind: .warning, message: "这个搜索结果缺少快照位置")
+        notice = AppNotice(
+          kind: .warning,
+          message: "这个搜索结果缺少快照位置",
+          browserKind: result.sourceKind
+        )
         return
       }
       showSnapshotGroup(snapshotId: snapshotId, windowId: windowId, groupId: groupId)
@@ -733,11 +772,16 @@ final class AppModel: ObservableObject {
       refresh(force: true)
       notice = AppNotice(
         kind: .success,
-        message: snapshot.sourceKind == .safari ? "合集已重命名" : "快照已重命名"
+        message: snapshot.sourceKind == .safari ? "合集已重命名" : "快照已重命名",
+        browserKind: snapshot.sourceKind
       )
       return true
     } catch {
-      notice = AppNotice(kind: .error, message: error.localizedDescription)
+      notice = AppNotice(
+        kind: .error,
+        message: error.localizedDescription,
+        browserKind: snapshot.sourceKind
+      )
       return false
     }
   }
@@ -762,10 +806,15 @@ final class AppModel: ObservableObject {
       refresh(force: true)
       notice = AppNotice(
         kind: .success,
-        message: snapshot.sourceKind == .safari ? "合集已删除" : "快照已删除"
+        message: snapshot.sourceKind == .safari ? "合集已删除" : "快照已删除",
+        browserKind: snapshot.sourceKind
       )
     } catch {
-      notice = AppNotice(kind: .error, message: "删除失败：\(error.localizedDescription)")
+      notice = AppNotice(
+        kind: .error,
+        message: "删除失败：\(error.localizedDescription)",
+        browserKind: snapshot.sourceKind
+      )
     }
   }
 
@@ -778,7 +827,11 @@ final class AppModel: ObservableObject {
     switch result.kind {
     case .live:
       guard let tabId = result.tabId, let windowId = result.windowId else {
-        notice = AppNotice(kind: .error, message: "定位信息不完整")
+        notice = AppNotice(
+          kind: .error,
+          message: "定位信息不完整",
+          browserKind: result.sourceKind
+        )
         return
       }
       enqueue(
@@ -792,7 +845,11 @@ final class AppModel: ObservableObject {
       )
     case .snapshot:
       guard let url = result.url else {
-        notice = AppNotice(kind: .error, message: "网页地址不完整")
+        notice = AppNotice(
+          kind: .error,
+          message: "网页地址不完整",
+          browserKind: result.sourceKind
+        )
         return
       }
       if result.sourceKind == .safari {
@@ -819,7 +876,8 @@ final class AppModel: ObservableObject {
         kind: .warning,
         message: result.kind == .live
           ? "实时数据已经过期，等待 Chrome 重新连接后才能定位"
-          : "对应浏览器暂时无法打开这个快照网页"
+          : "对应浏览器暂时无法打开这个快照网页",
+        browserKind: result.sourceKind
       )
       return
     }
@@ -938,18 +996,30 @@ final class AppModel: ObservableObject {
   private func openInSafari(urls: [String]) {
     let webURLs = urls.compactMap(URL.init(string:))
     guard !webURLs.isEmpty else {
-      notice = AppNotice(kind: .warning, message: "没有可以在 Safari 打开的网页")
+      notice = AppNotice(
+        kind: .warning,
+        message: "没有可以在 Safari 打开的网页",
+        browserKind: .safari
+      )
       return
     }
     if isDemoMode {
-      notice = AppNotice(kind: .warning, message: "演示模式不会打开真实 Safari")
+      notice = AppNotice(
+        kind: .warning,
+        message: "演示模式不会打开真实 Safari",
+        browserKind: .safari
+      )
       return
     }
 
     guard let safariURL = NSWorkspace.shared.urlForApplication(
       withBundleIdentifier: "com.apple.Safari"
     ) else {
-      notice = AppNotice(kind: .error, message: "无法找到 Safari 应用")
+      notice = AppNotice(
+        kind: .error,
+        message: "无法找到 Safari 应用",
+        browserKind: .safari
+      )
       return
     }
     NSWorkspace.shared.open(
@@ -960,7 +1030,8 @@ final class AppModel: ObservableObject {
     )
     notice = AppNotice(
       kind: .success,
-      message: "已请求 Safari 打开 \(webURLs.count) 个网页"
+      message: "已请求 Safari 打开 \(webURLs.count) 个网页",
+      browserKind: .safari
     )
   }
 
@@ -1163,18 +1234,26 @@ final class AppModel: ObservableObject {
       if command.action == .restoreGroup {
         showDemoRestoreReceipt(for: command)
       } else {
-        notice = AppNotice(kind: .warning, message: demoMessage)
+        notice = AppNotice(kind: .warning, message: demoMessage, browserKind: .chrome)
       }
       return
     }
 
     guard isSourceConnected(command.sourceId) else {
-      notice = AppNotice(kind: .warning, message: "Chrome 未连接，暂时无法执行这个操作")
+      notice = AppNotice(
+        kind: .warning,
+        message: "Chrome 未连接，暂时无法执行这个操作",
+        browserKind: .chrome
+      )
       return
     }
 
     guard let commandRepository else {
-      notice = AppNotice(kind: .error, message: "本地桥接尚未就绪")
+      notice = AppNotice(
+        kind: .error,
+        message: "本地桥接尚未就绪",
+        browserKind: .chrome
+      )
       return
     }
 
@@ -1184,9 +1263,17 @@ final class AppModel: ObservableObject {
         command: command,
         deadline: Date().addingTimeInterval(command.action == .restoreGroup ? 30 : 3)
       )
-      notice = AppNotice(kind: .success, message: "命令已发送，等待 Chrome 响应")
+      notice = AppNotice(
+        kind: .success,
+        message: "命令已发送，等待 Chrome 响应",
+        browserKind: .chrome
+      )
     } catch {
-      notice = AppNotice(kind: .error, message: "命令发送失败：\(error.localizedDescription)")
+      notice = AppNotice(
+        kind: .error,
+        message: "命令发送失败：\(error.localizedDescription)",
+        browserKind: .chrome
+      )
     }
   }
 
@@ -1207,7 +1294,11 @@ final class AppModel: ObservableObject {
               sourceLabel: chromeSourceLabel(for: pending.command.sourceId),
               result: result
             ) else {
-              notice = AppNotice(kind: .error, message: "Chrome 返回的恢复结果与原命令不一致")
+              notice = AppNotice(
+                kind: .error,
+                message: "Chrome 返回的恢复结果与原命令不一致",
+                browserKind: .chrome
+              )
               continue
             }
             chromeRestoreReceipt = receipt
@@ -1215,7 +1306,8 @@ final class AppModel: ObservableObject {
           } else {
             notice = AppNotice(
               kind: result.success ? .success : .error,
-              message: result.message
+              message: result.message,
+              browserKind: .chrome
             )
           }
           continue
@@ -1230,11 +1322,19 @@ final class AppModel: ObservableObject {
             chromeRestoreReceipt = receipt
             notice = nil
           } else {
-            notice = AppNotice(kind: .warning, message: "Chrome 未及时响应，请检查连接状态")
+            notice = AppNotice(
+              kind: .warning,
+              message: "Chrome 未及时响应，请检查连接状态",
+              browserKind: .chrome
+            )
           }
         }
       } catch {
-        notice = AppNotice(kind: .error, message: "读取命令结果失败：\(error.localizedDescription)")
+        notice = AppNotice(
+          kind: .error,
+          message: "读取命令结果失败：\(error.localizedDescription)",
+          browserKind: .chrome
+        )
       }
     }
   }

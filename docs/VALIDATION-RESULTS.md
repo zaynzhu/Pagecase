@@ -79,7 +79,7 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 
 ## 视觉结果
 
-通过 Computer Use 对独立的 `com.zaynzhu.pagecase.qa06final`、`com.zaynzhu.pagecase.qasearch`、`com.zaynzhu.pagecase.qaimport` 与 `com.zaynzhu.pagecase.qareadiness` 演示应用完成浅色与深色验收：
+通过 Computer Use 对独立的 `com.zaynzhu.pagecase.qa06final`、`com.zaynzhu.pagecase.qasearch`、`com.zaynzhu.pagecase.qaimport`、`com.zaynzhu.pagecase.qareadiness` 与 `com.zaynzhu.pagecase.qafindaudit` 演示应用完成浅色与深色验收：
 
 - 侧栏固定分成 `CHROME` 与 `SAFARI`，分别使用浏览器图标、名称、识别色和独立数量。
 - Chrome 只显示“现在 / 快照 / 实时来源”；Safari 只显示“按需收纳 / 合集”。
@@ -106,6 +106,9 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 - 浅色模式完整成功回执显示 3／3 个标签与“已成组”；深色模式部分完成回执同时显示已创建标签、未成组、失败原因以及“不自动清理或重试”。
 - Chrome 回执进入 Safari 合集后完全隐藏，页面中只保留 Safari 徽章和动作；返回 Chrome 快照后同一回执重新出现，没有发生跨浏览器状态转换。
 - Safari 合集仍使用独立的“在 Safari 打开 N 个网页”系统确认，没有出现 Chrome 恢复徽章、重复网址计数或标签组语义。
+- Chrome 定位反馈以 Chrome 图标、`CHROME` 和结果正文组成；进入 Safari 合集后提示完全消失，返回 Chrome 后同一结果重新出现。
+- Safari 按需读取反馈以 Safari 图标、`SAFARI` 和读取数量组成；进入 Chrome 现在或 Chrome 专属搜索后隐藏，在全部浏览器及 Safari 专属搜索中恢复。
+- Safari 专属搜索的两个网页动作均以单行“Safari 打开”显示；浅色和深色来源提示都通过对比度与可访问性文字核对，没有只靠蓝紫颜色区分。
 
 本轮新增验收图：
 
@@ -127,6 +130,12 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 - [Chrome 标签组恢复成功回执](../artifacts/qa-restore-receipt-success.png)
 - [Chrome 标签组部分完成回执深色模式](../artifacts/qa-restore-receipt-partial-dark.png)
 - [Safari 页面隐藏 Chrome 回执](../artifacts/qa-restore-receipt-safari-hidden.png)
+- [Chrome 来源操作提示](../artifacts/qa-browser-notice-chrome.png)
+- [Safari 页面隐藏 Chrome 提示](../artifacts/qa-browser-notice-safari-hidden.png)
+- [Safari 来源操作提示](../artifacts/qa-browser-notice-safari.png)
+- [Chrome 页面隐藏 Safari 提示](../artifacts/qa-browser-notice-chrome-hidden.png)
+- [Safari 专属搜索与来源提示](../artifacts/qa-browser-notice-search-safari.png)
+- [Chrome 来源提示深色模式](../artifacts/qa-browser-notice-chrome-dark.png)
 
 界面延续 `minimalist-ui` 的原生转译：温暖单色、清晰排版、1px 分隔、克制圆角和低饱和来源色。Safari 没有另起一套视觉系统，而是在同一资料柜语言中形成明确但安静的来源边界。
 
@@ -136,9 +145,9 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 
 | 指标 | 实测 | 门槛 |
 |---|---:|---:|
-| 应用物理内存足迹 | 46MB | 目标 ≤80MB，上限 ≤100MB |
-| 应用 RSS（诊断值） | 60 秒后约 98.1MB | 记录共享框架与图形映射，不单独作为内存压力结论 |
-| 应用 CPU（10 次稳定采样平均） | 约 0.44%，最终 0.1% | ≤1% |
+| 应用物理内存足迹 | 40MB | 目标 ≤80MB，上限 ≤100MB |
+| 应用 RSS（诊断值） | 60 秒后约 111.1MB | 记录共享框架与图形映射，不单独作为内存压力结论 |
+| 应用 CPU（10 次稳定采样平均） | 约 0.54%，最终 0.0% | ≤1% |
 | 菜单栏驻留物理内存足迹 | 47MB | ≤100MB |
 | 菜单栏驻留 RSS（诊断值） | 107.9MB | 记录 |
 | 菜单栏驻留 CPU | 0.0% | ≤1% |
@@ -147,7 +156,7 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 
 500 页长分组首次只建立 40 行视图，其余按需加载。收纳状态筛选只对内存中的 Chrome 标签组和已有快照求值；搜索筛选只是结果集合的来源条件，分区导出和导入预览都只在用户点击后执行，没有增加轮询器、数据库、WebView 或额外进程。
 
-本轮同机 500 页 Release 进程在空闲 60 秒后物理内存足迹为 46MB，RSS 约 98.1MB；10 次稳定 CPU 采样平均约 0.44%，最终采样为 0.1%，均低于验收上限。恢复预览和回执只在用户点击及对应命令结果到达时建立，没有增加轮询器、数据库、WebView 或额外常驻进程。
+本轮同机 500 页 Release 进程在空闲 60 秒后物理内存足迹为 40MB，RSS 约 111.1MB；10 次稳定 CPU 采样平均约 0.54%，最终采样为 0.0%。RSS 比上一轮记录高约 13MB，但作为共享框架与图形映射诊断值会随启动环境波动；实际物理内存足迹下降 6MB，仍明显低于 80MB 目标。来源提示只在已有状态变化时重绘，没有增加轮询器、数据库、WebView 或额外常驻进程。
 
 ## 打包结果
 
