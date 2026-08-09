@@ -95,6 +95,16 @@ npm run check:safari
 - 标签组资料晚于标签列表时暂按未分组保存，输出结构仍通过校验
 - 未知命令被拒绝
 
+### 2.3 GitHub Actions
+
+`.github/workflows/quality.yml` 在推送到 `main`、Pull Request 和用户手动触发时运行。必须满足：
+
+- 只使用标准 `macos-15` runner，不使用收费的 larger runner。
+- 顶层权限只有 `contents: read`，不写仓库、Issue、Pull Request、Package 或 Release。
+- 执行 Swift 构建、测试与核心检查，Chrome 扩展行为和危险 API 扫描，Safari 按需读取扫描，以及 Release Bridge 往返。
+- 不上传安装包或其他构建产物，不读取 Secret，不安装扩展、不注册 Host，也不连接真实 Chrome 或 Safari。
+- 同一分支的新运行取消旧运行，避免重复占用 runner。
+
 ## 3. 静态安全验证
 
 在扩展目录执行禁止 API 扫描，以下内容必须零命中：

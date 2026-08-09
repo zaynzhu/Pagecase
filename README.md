@@ -266,6 +266,8 @@ npm run check:safari
 ./scripts/build-app.sh
 ```
 
+仓库内置 [GitHub Actions 项目检查](.github/workflows/quality.yml)：推送到 `main`、提交 Pull Request 或手动触发时，使用标准 `macos-15` runner 执行同一组 Swift、扩展、Safari 边界、Release 与 Bridge 检查。工作流只有代码读取权限，不上传构建产物，也不会连接真实 Chrome 或 Safari。
+
 当前 0.6.0 版本已通过 98 项 Swift 核心行为检查、13 项扩展测试、Bridge 结构化结果往返、Chrome 扩展与 Safari 捕获静态安全检查、Release 构建、浅深色视觉验收和 500 页性能验收。
 
 > [!NOTE]

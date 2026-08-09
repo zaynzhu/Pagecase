@@ -1,0 +1,54 @@
+name: 项目检查
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pagecase-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: 构建与安全检查
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - name: 读取代码
+        uses: actions/checkout@v7
+
+      - name: 准备 Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: 记录工具链
+        run: |
+          swift --version
+          node --version
+          npm --version
+
+      - name: 构建并检查 Swift 核心
+        run: |
+          swift build
+          swift test --enable-swift-testing --disable-xctest
+          swift run PagecaseCoreChecks
+
+      - name: 检查 Chrome 与 Safari 边界
+        run: |
+          npm run check:extension
+          npm run test:extension
+          ./scripts/validate-extension.sh
+          npm run check:safari
+
+      - name: 检查 Release 与 Bridge 协议
+        run: |
+          swift build -c release
+          npm run test:bridge

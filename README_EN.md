@@ -266,6 +266,8 @@ npm run check:safari
 ./scripts/build-app.sh
 ```
 
+The repository includes a [GitHub Actions quality workflow](.github/workflows/quality.yml). Pushes to `main`, pull requests, and manual runs execute the same Swift, extension, Safari-boundary, Release, and Bridge checks on a standard `macos-15` runner. The workflow has read-only repository access, uploads no build artifacts, and never connects to a real Chrome or Safari session.
+
 Pagecase 0.6.0 has passed 98 Swift core behavior checks, 13 extension tests, the structured Bridge result round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run.
 
 > [!NOTE]

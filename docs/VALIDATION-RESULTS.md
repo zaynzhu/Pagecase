@@ -26,6 +26,7 @@
 | Safari AppleScript 只编译检查 | `osacompile` 通过，未执行脚本 |
 | Bridge 快照、结构化结果与 ping 往返 | 通过 |
 | Release Swift 构建 | 通过 |
+| GitHub Actions YAML 与本地等价命令 | 语法通过，等价检查全部通过；首次远程运行待推送 |
 | 隔离 Release `.app` ad-hoc 签名 | 严格验证通过 |
 | 应用版本与构建号 | `0.6.0` / `7` |
 | `NSAppleEventsUsageDescription` | 已包含并核对 |
@@ -158,6 +159,7 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 
 ## 未验证项
 
+- GitHub Actions 工作流推送后的首次远程运行结果。
 - 真实 Safari 首次自动化权限提示与授权路径。
 - 从真实 Safari 最前方窗口读取标题、网址、顺序和当前页。
 - 从真实 Safari 合集打开单页或打开全部。
