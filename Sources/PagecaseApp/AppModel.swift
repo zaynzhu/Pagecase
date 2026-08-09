@@ -92,6 +92,7 @@ final class AppModel: ObservableObject {
   @Published var selectedSourceId: String?
   @Published var selectedSnapshotId: String?
   @Published var searchQuery = ""
+  @Published var searchBrowserFilter: SearchBrowserFilter = .all
   @Published var selectedSearchResultId: String?
   @Published var searchFocusRequest = 0
   @Published var extensionId = ""
@@ -285,7 +286,8 @@ final class AppModel: ObservableObject {
       query: searchQuery,
       liveStates: liveStates,
       snapshots: snapshots,
-      sourceLabels: Dictionary(uniqueKeysWithValues: liveStates.map { ($0.source.id, $0.source.label) })
+      sourceLabels: Dictionary(uniqueKeysWithValues: liveStates.map { ($0.source.id, $0.source.label) }),
+      browserFilter: searchBrowserFilter
     )
   }
 
@@ -305,6 +307,7 @@ final class AppModel: ObservableObject {
   func selectNavigation(_ item: NavigationItem) {
     selection = item
     searchQuery = ""
+    searchBrowserFilter = .all
     switch item {
     case .chromeLibrary:
       if !chromeSnapshots.contains(where: { $0.id == selectedSnapshotId }) {
@@ -440,6 +443,21 @@ final class AppModel: ObservableObject {
 
   func requestSearchFocus() {
     searchFocusRequest += 1
+  }
+
+  func selectSearchBrowserFilter(_ filter: SearchBrowserFilter) {
+    guard searchBrowserFilter != filter else {
+      return
+    }
+    searchBrowserFilter = filter
+    resetSearchSelection()
+  }
+
+  func handleSearchQueryChange() {
+    if searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      searchBrowserFilter = .all
+    }
+    resetSearchSelection()
   }
 
   func consumeSearchFocusRequest() -> Bool {
@@ -616,6 +634,7 @@ final class AppModel: ObservableObject {
       selectedSourceId = result.sourceId
       selection = .chromeLive
       searchQuery = ""
+      searchBrowserFilter = .all
       groupFocusRequest = GroupFocusRequest(
         scope: scope,
         windowId: windowId,
@@ -776,6 +795,7 @@ final class AppModel: ObservableObject {
     selectedSnapshotId = snapshotId
     selection = .chromeLibrary
     searchQuery = ""
+    searchBrowserFilter = .all
     groupFocusRequest = GroupFocusRequest(
       scope: scope,
       windowId: windowId,
@@ -820,6 +840,7 @@ final class AppModel: ObservableObject {
 
   func clearSearch() {
     searchQuery = ""
+    searchBrowserFilter = .all
     selectedSearchResultId = nil
   }
 
@@ -902,14 +923,36 @@ final class AppModel: ObservableObject {
     )
   }
 
-  func exportLibrary() {
+  func exportLibrary(browserKind: BrowserKind? = nil) {
     guard let snapshotRepository else {
       return
     }
 
+    let exportName: String
+    let fileName: String
+    let exportCount: Int
+    switch browserKind {
+    case .chrome:
+      exportName = "Chrome 快照"
+      fileName = "页匣-Chrome-快照.json"
+      exportCount = chromeSnapshots.count
+    case .safari:
+      exportName = "Safari 合集"
+      fileName = "页匣-Safari-合集.json"
+      exportCount = safariCollections.count
+    case nil:
+      exportName = "完整资料库"
+      fileName = "页匣资料库.json"
+      exportCount = snapshots.count
+    }
+    guard exportCount > 0 else {
+      notice = AppNotice(kind: .warning, message: "当前没有可以导出的 \(exportName)")
+      return
+    }
+
     let warning = NSAlert()
-    warning.messageText = "导出完整资料库？"
-    warning.informativeText = "导出文件包含网页完整网址和可能存在的查询参数，请按浏览数据妥善保管。"
+    warning.messageText = "导出\(exportName)？"
+    warning.informativeText = "将导出 \(exportCount) 份本地资料。文件包含网页完整网址和可能存在的查询参数，请按浏览数据妥善保管。"
     warning.alertStyle = .informational
     warning.addButton(withTitle: "继续导出")
     warning.addButton(withTitle: "取消")
@@ -918,7 +961,7 @@ final class AppModel: ObservableObject {
     }
 
     let panel = NSSavePanel()
-    panel.nameFieldStringValue = "页匣资料库.json"
+    panel.nameFieldStringValue = fileName
     panel.allowedContentTypes = [.json]
     panel.canCreateDirectories = true
 
@@ -927,8 +970,15 @@ final class AppModel: ObservableObject {
     }
 
     do {
-      try snapshotRepository.exportLibrary(to: url, applicationVersion: Self.applicationVersion)
-      notice = AppNotice(kind: .success, message: "资料库已导出")
+      try snapshotRepository.exportLibrary(
+        to: url,
+        applicationVersion: Self.applicationVersion,
+        browserKind: browserKind
+      )
+      let successMessage = browserKind == nil
+        ? "完整资料库已导出，共 \(exportCount) 份本地资料"
+        : "已导出 \(exportCount) 份 \(exportName)"
+      notice = AppNotice(kind: .success, message: successMessage)
     } catch {
       notice = AppNotice(kind: .error, message: "导出失败：\(error.localizedDescription)")
     }

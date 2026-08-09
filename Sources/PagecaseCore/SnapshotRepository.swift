@@ -128,10 +128,17 @@ public struct SnapshotRepository: Sendable {
     try FileManager.default.removeItem(at: file)
   }
 
-  public func exportLibrary(to url: URL, applicationVersion: String) throws {
+  public func exportLibrary(
+    to url: URL,
+    applicationVersion: String,
+    browserKind: BrowserKind? = nil
+  ) throws {
+    let snapshots = try loadSnapshots()
     let payload = LibraryExport(
       applicationVersion: applicationVersion,
-      snapshots: try loadSnapshots()
+      snapshots: snapshots.filter { snapshot in
+        browserKind.map { snapshot.sourceKind == $0 } ?? true
+      }
     )
     try store.write(payload, to: url, prettyPrinted: true)
   }

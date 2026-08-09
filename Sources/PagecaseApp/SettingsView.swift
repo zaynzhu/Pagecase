@@ -26,13 +26,34 @@ struct SettingsView: View {
 
           Divider()
 
+          browserLibraryRow(
+            kind: .chrome,
+            count: model.chromeSnapshots.count,
+            detail: "完整现场与标签组快照"
+          ) {
+            model.exportLibrary(browserKind: .chrome)
+          }
+
+          Divider()
+
+          browserLibraryRow(
+            kind: .safari,
+            count: model.safariCollections.count,
+            detail: "按需读取后保存的本地合集"
+          ) {
+            model.exportLibrary(browserKind: .safari)
+          }
+
+          Divider()
+
           HStack(spacing: 10) {
-            Button("导入资料库") {
+            Button("导入本地资料") {
               model.importLibrary()
             }
-            Button("导出资料库") {
+            Button("导出全部资料") {
               model.exportLibrary()
             }
+            .disabled(model.snapshots.isEmpty)
             Spacer()
           }
           .buttonStyle(.bordered)
@@ -239,6 +260,39 @@ struct SettingsView: View {
         .foregroundStyle(Palette.muted(colorScheme))
         .textSelection(.enabled)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
+  private func browserLibraryRow(
+    kind: BrowserKind,
+    count: Int,
+    detail: String,
+    export: @escaping () -> Void
+  ) -> some View {
+    HStack(alignment: .center, spacing: 12) {
+      Image(systemName: kind.symbol)
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(kind.accentColor)
+        .frame(width: 18)
+
+      VStack(alignment: .leading, spacing: 3) {
+        Text(kind == .chrome ? "Chrome 快照" : "Safari 合集")
+          .font(.system(size: 12, weight: .medium))
+        Text(detail)
+          .font(.system(size: 10))
+          .foregroundStyle(Palette.muted(colorScheme))
+      }
+
+      Spacer()
+
+      Text("\(count) 份")
+        .font(.system(size: 10, design: .monospaced))
+        .foregroundStyle(Palette.muted(colorScheme))
+
+      Button("单独导出", action: export)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(count == 0)
     }
   }
 

@@ -133,6 +133,76 @@ func runChecks() throws -> Int {
       && safariResults.first?.sourceLabel == SafariCollectionBuilder.sourceLabel,
     "Safari 搜索结果缺少明确浏览器来源"
   )
+  let allBrowserResults = SearchEngine.search(
+    query: "example.com",
+    liveStates: states,
+    snapshots: snapshots
+  )
+  let chromeOnlyResults = SearchEngine.search(
+    query: "example.com",
+    liveStates: states,
+    snapshots: snapshots,
+    browserFilter: .chrome
+  )
+  let safariOnlyResults = SearchEngine.search(
+    query: "example.com",
+    liveStates: states,
+    snapshots: snapshots,
+    browserFilter: .safari
+  )
+  passed += try check(
+    Set(allBrowserResults.map(\.sourceKind)) == [.chrome, .safari],
+    "全部浏览器搜索没有同时保留 Chrome 与 Safari"
+  )
+  passed += try check(
+    !chromeOnlyResults.isEmpty
+      && chromeOnlyResults.allSatisfy { $0.sourceKind == .chrome },
+    "Chrome 搜索筛选混入了 Safari 合集"
+  )
+  passed += try check(
+    !safariOnlyResults.isEmpty
+      && safariOnlyResults.allSatisfy { $0.sourceKind == .safari },
+    "Safari 搜索筛选混入了 Chrome 资料"
+  )
+  passed += try withTemporaryPaths { paths in
+    var localPassed = 0
+    let repository = try SnapshotRepository(paths: paths)
+    for snapshot in snapshots {
+      try repository.saveSnapshot(snapshot)
+    }
+    let chromeURL = paths.root.appendingPathComponent("chrome-library.json")
+    let safariURL = paths.root.appendingPathComponent("safari-library.json")
+    try repository.exportLibrary(
+      to: chromeURL,
+      applicationVersion: "check",
+      browserKind: .chrome
+    )
+    try repository.exportLibrary(
+      to: safariURL,
+      applicationVersion: "check",
+      browserKind: .safari
+    )
+    let decoder = PagecaseJSON.makeDecoder()
+    let chromeExport = try decoder.decode(
+      LibraryExport.self,
+      from: Data(contentsOf: chromeURL)
+    )
+    let safariExport = try decoder.decode(
+      LibraryExport.self,
+      from: Data(contentsOf: safariURL)
+    )
+    localPassed += try check(
+      chromeExport.snapshots.count == 4
+        && chromeExport.snapshots.allSatisfy { $0.sourceKind == .chrome },
+      "Chrome 单独导出混入了 Safari 合集"
+    )
+    localPassed += try check(
+      safariExport.snapshots.count == 1
+        && safariExport.snapshots.allSatisfy { $0.sourceKind == .safari },
+      "Safari 单独导出混入了 Chrome 快照"
+    )
+    return localPassed
+  }
   guard let series = developmentSeries,
         let seriesWindow = series.latestSnapshot.windows.first,
         let seriesGroup = seriesWindow.groups.first else {

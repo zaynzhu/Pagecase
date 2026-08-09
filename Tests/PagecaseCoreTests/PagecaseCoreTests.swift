@@ -115,6 +115,71 @@ func safariCollectionPersistsAndSearchesAsSafari() throws {
 }
 
 @Test
+func searchBrowserFilterKeepsChromeAndSafariResultsSeparate() {
+  let states = DemoData.liveStates(referenceDate: referenceDate)
+  let snapshots = DemoData.snapshots(referenceDate: referenceDate)
+  let allResults = SearchEngine.search(
+    query: "example.com",
+    liveStates: states,
+    snapshots: snapshots
+  )
+  let chromeResults = SearchEngine.search(
+    query: "example.com",
+    liveStates: states,
+    snapshots: snapshots,
+    browserFilter: .chrome
+  )
+  let safariResults = SearchEngine.search(
+    query: "example.com",
+    liveStates: states,
+    snapshots: snapshots,
+    browserFilter: .safari
+  )
+
+  #expect(Set(allResults.map(\.sourceKind)) == [.chrome, .safari])
+  #expect(!chromeResults.isEmpty && chromeResults.allSatisfy { $0.sourceKind == .chrome })
+  #expect(!safariResults.isEmpty && safariResults.allSatisfy { $0.sourceKind == .safari })
+}
+
+@Test
+func browserScopedExportKeepsChromeAndSafariInSeparateFiles() throws {
+  try withTemporaryPaths { paths in
+    let repository = try SnapshotRepository(paths: paths)
+    for snapshot in DemoData.snapshots(referenceDate: referenceDate) {
+      try repository.saveSnapshot(snapshot)
+    }
+
+    let chromeURL = paths.root.appendingPathComponent("chrome-library.json")
+    let safariURL = paths.root.appendingPathComponent("safari-library.json")
+    try repository.exportLibrary(
+      to: chromeURL,
+      applicationVersion: "test",
+      browserKind: .chrome
+    )
+    try repository.exportLibrary(
+      to: safariURL,
+      applicationVersion: "test",
+      browserKind: .safari
+    )
+
+    let decoder = PagecaseJSON.makeDecoder()
+    let chromeExport = try decoder.decode(
+      LibraryExport.self,
+      from: Data(contentsOf: chromeURL)
+    )
+    let safariExport = try decoder.decode(
+      LibraryExport.self,
+      from: Data(contentsOf: safariURL)
+    )
+
+    #expect(chromeExport.snapshots.count == 4)
+    #expect(chromeExport.snapshots.allSatisfy { $0.sourceKind == .chrome })
+    #expect(safariExport.snapshots.count == 1)
+    #expect(safariExport.snapshots.allSatisfy { $0.sourceKind == .safari })
+  }
+}
+
+@Test
 func snapshotLibraryKeepsChangedGroupContextInAnotherSeries() throws {
   let state = try #require(DemoData.liveStates(referenceDate: referenceDate).first)
   let window = try #require(state.windows.first)

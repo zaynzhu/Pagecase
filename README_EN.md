@@ -38,11 +38,11 @@ Let pages leave memory, not your reach.
 - **Explicit browser separation** — Sidebar sections, libraries, counts, icons, and actions distinguish Chrome from Safari; mixed search results still identify their browser.
 - **Full-state or group snapshots** — Save the complete Chrome state or one tab group; neither is overwritten by later Chrome changes.
 - **Safe-to-close status** — Shows snapshot coverage for the complete live state and each tab group, including the number of newly unsaved pages.
-- **Fast page and group retrieval** — Searches titles, domains, full URLs, tab groups, and snapshot names; groups appear as first-class results that can be viewed or explicitly restored from snapshots.
+- **Fast page and group retrieval** — Searches titles, domains, full URLs, tab groups, and snapshot names with an explicit All / Chrome / Safari scope; groups remain first-class results.
 - **Restore on demand** — Focuses a page still open in Chrome, opens one page from a snapshot, or restores a complete tab group in order.
 - **Preserved context** — Keeps windows, group names, colors, order, and duplicate URLs instead of merging identical URLs from different contexts.
 - **Group version series** — Collects repeated saves of the same tab group into one series, prioritizing the latest snapshot while keeping every older version available.
-- **Local library management** — Supports confirmed deletion and versioned JSON library import and export.
+- **Local library management** — Supports confirmed deletion, complete-library backups, and separate exports for Chrome snapshots and Safari collections.
 - **Native and lightweight** — Uses SwiftUI, AppKit, and a tiny Manifest V3 connector without Electron, WebView, a database, or cloud services.
 
 ---
@@ -145,11 +145,14 @@ A Safari collection is never presented as a Chrome snapshot and never modifies S
 
 Press `⌘K` and search by title, domain, URL, tab group, or snapshot name:
 
+- Switch between All, Chrome, and Safari above the results. The top-bar badge follows the active scope, and a browser-only result set never includes the other browser.
 - A live result uses Focus and only activates an already open tab.
 - A snapshot result uses Open and creates only one new tab.
 - A group result uses View and only navigates inside Pagecase. Snapshot groups expose a separate Restore Group action that confirms the page count before creating tabs.
 - Return on a group performs View and never restores the group directly.
 - When a source is offline or stale, its actions are disabled while local snapshots remain searchable and readable.
+
+![Filter search results by browser](artifacts/qa-search-browser-filter.png)
 
 ### Restore a group or delete a snapshot
 
@@ -214,7 +217,7 @@ Production data is stored by default in:
 └── ChromeExtension/
 ```
 
-Chrome snapshots and Safari collections share the `snapshots/` directory, while every JSON file persists its browser kind and source label so the app can keep them separate. Files contain full URLs that may include sensitive query parameters; treat copies and exports as browsing data.
+Chrome snapshots and Safari collections share the `snapshots/` directory, while every JSON file persists its browser kind and source label so the app can keep them separate. Settings can export the complete library or browser-specific Chrome and Safari files; a scoped export never includes the other browser. Files contain full URLs that may include sensitive query parameters; treat copies and exports as browsing data.
 
 ---
 
@@ -242,7 +245,7 @@ npm run check:safari
 ./scripts/build-app.sh
 ```
 
-Pagecase 0.6.0 has passed 77 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run.
+Pagecase 0.6.0 has passed 82 Swift core behavior checks, 10 extension tests, the Bridge protocol round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run.
 
 > [!NOTE]
 > A Command Line Tools-only environment cannot enumerate Swift Testing tests correctly. `swift test` still compiles the test package, while `PagecaseCoreChecks` executes the same critical behavior checks.

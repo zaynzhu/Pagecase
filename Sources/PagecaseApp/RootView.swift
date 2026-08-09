@@ -23,7 +23,7 @@ struct RootView: View {
           Divider()
 
           Group {
-            if !model.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if isSearchActive {
               SearchResultsView(model: model)
             } else {
               selectedContent
@@ -54,7 +54,7 @@ struct RootView: View {
       focusSearchIfRequested()
     }
     .onChange(of: model.searchQuery) { _, _ in
-      model.resetSearchSelection()
+      model.handleSearchQueryChange()
     }
     .overlay(alignment: .topTrailing) {
       if let notice = model.notice {
@@ -158,7 +158,9 @@ struct RootView: View {
 
   @ViewBuilder
   private var contextBadge: some View {
-    if model.selection.browserKind == .safari {
+    if isSearchActive {
+      searchContextBadge
+    } else if model.selection.browserKind == .safari {
       BrowserModeBadge(
         kind: .safari,
         label: model.isDemoMode ? "Safari 演示" : "仅在点击时读取"
@@ -169,6 +171,35 @@ struct RootView: View {
         isDemoMode: model.isDemoMode
       )
     }
+  }
+
+  @ViewBuilder
+  private var searchContextBadge: some View {
+    if let browserKind = model.searchBrowserFilter.browserKind {
+      BrowserModeBadge(kind: browserKind, label: "仅看 \(browserKind.displayName)")
+    } else {
+      HStack(spacing: 6) {
+        HStack(spacing: 3) {
+          Image(systemName: BrowserKind.chrome.symbol)
+            .foregroundStyle(BrowserKind.chrome.accentColor)
+          Image(systemName: BrowserKind.safari.symbol)
+            .foregroundStyle(BrowserKind.safari.accentColor)
+        }
+        .font(.system(size: 9, weight: .semibold))
+
+        Text("全部浏览器")
+          .font(.system(size: 11, weight: .semibold))
+      }
+      .padding(.horizontal, 9)
+      .padding(.vertical, 5)
+      .background(Palette.selection(colorScheme))
+      .clipShape(Capsule())
+      .accessibilityLabel("搜索全部浏览器")
+    }
+  }
+
+  private var isSearchActive: Bool {
+    !model.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
   }
 
   private var footer: some View {

@@ -10,6 +10,23 @@ public enum SearchResultTarget: String, Codable, Sendable {
   case group
 }
 
+public enum SearchBrowserFilter: String, CaseIterable, Sendable {
+  case all
+  case chrome
+  case safari
+
+  public func includes(_ browserKind: BrowserKind) -> Bool {
+    switch self {
+    case .all:
+      return true
+    case .chrome:
+      return browserKind == .chrome
+    case .safari:
+      return browserKind == .safari
+    }
+  }
+}
+
 public struct SearchResult: Identifiable, Equatable, Sendable {
   public let id: String
   public let kind: SearchResultKind
@@ -70,7 +87,8 @@ public enum SearchEngine {
     query: String,
     liveStates: [LiveState],
     snapshots: [SavedSnapshot],
-    sourceLabels: [String: String] = [:]
+    sourceLabels: [String: String] = [:],
+    browserFilter: SearchBrowserFilter = .all
   ) -> [SearchResult] {
     let normalizedQuery = normalize(query)
     guard !normalizedQuery.isEmpty else {
@@ -79,7 +97,7 @@ public enum SearchEngine {
 
     var scored: [(score: Int, result: SearchResult)] = []
 
-    for state in liveStates {
+    for state in liveStates where browserFilter.includes(state.source.kind) {
       let sourceLabel = sourceLabels[state.source.id] ?? state.source.label
       appendItems(
         windows: state.windows,
@@ -95,7 +113,7 @@ public enum SearchEngine {
       )
     }
 
-    for snapshot in snapshots {
+    for snapshot in snapshots where browserFilter.includes(snapshot.sourceKind) {
       let sourceLabel = sourceLabels[snapshot.sourceId] ?? snapshot.sourceLabel
       appendItems(
         windows: snapshot.windows,

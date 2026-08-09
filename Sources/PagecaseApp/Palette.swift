@@ -81,6 +81,41 @@ extension BrowserKind {
   }
 }
 
+extension SearchBrowserFilter {
+  var title: String {
+    switch self {
+    case .all:
+      return "全部"
+    case .chrome:
+      return "Chrome"
+    case .safari:
+      return "Safari"
+    }
+  }
+
+  var symbol: String {
+    switch self {
+    case .all:
+      return "square.grid.2x2"
+    case .chrome:
+      return BrowserKind.chrome.symbol
+    case .safari:
+      return BrowserKind.safari.symbol
+    }
+  }
+
+  var browserKind: BrowserKind? {
+    switch self {
+    case .all:
+      return nil
+    case .chrome:
+      return .chrome
+    case .safari:
+      return .safari
+    }
+  }
+}
+
 extension ChromeGroupColor {
   var displayColor: Color {
     switch self {

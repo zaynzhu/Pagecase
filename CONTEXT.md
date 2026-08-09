@@ -56,6 +56,14 @@ _Avoid_: Safari 标签组镜像、Chrome 快照
 每份本地记录持久保存 `sourceKind` 与 `sourceLabel`。Chrome 快照与 Safari 合集可以一起搜索，但不能互相参与覆盖判断、版本序列或浏览器专属动作。
 _Avoid_: 根据名称猜测浏览器、跨浏览器合并
 
+**搜索来源筛选（Search Browser Filter）**:
+全局搜索的“全部 / Chrome / Safari”范围。专属范围在搜索引擎遍历资料前排除另一浏览器，顶栏徽章与结果集合使用同一状态。
+_Avoid_: 只隐藏结果行、沿用进入搜索前的来源徽章
+
+**浏览器专属导出（Browser-scoped Export）**:
+只包含 Chrome 快照或只包含 Safari 合集的版本化 JSON 备份。筛选依据持久化的 `sourceKind`，而不是名称或当前页面。
+_Avoid_: 把另一浏览器记录混入专属备份
+
 **定位（Focus）**:
 在用户明确点击后，让 Chrome 显示一个已经打开的网页项，不创建副本，也不改变其分组和位置。
 _Avoid_: 打开、恢复

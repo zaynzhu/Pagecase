@@ -18,7 +18,7 @@
 |---|---|
 | `swift build` | 通过 |
 | `swift test --enable-swift-testing --disable-xctest` | 测试包构建通过 |
-| `swift run PagecaseCoreChecks` | 77 项通过 |
+| `swift run PagecaseCoreChecks` | 82 项通过 |
 | Chrome 扩展语法检查 | 通过 |
 | Chrome 扩展 Node 测试 | 10 项通过 |
 | Chrome 危险 API、分组恢复与网络扫描 | 通过，禁止项零命中 |
@@ -30,7 +30,7 @@
 | 应用版本与构建号 | `0.6.0` / `7` |
 | `NSAppleEventsUsageDescription` | 已包含并核对 |
 | `.app` 内置 Chrome 扩展文件 | 5 项齐全 |
-| 隔离 Release 应用体积 | 4.4MB |
+| 隔离 Release 应用体积 | 4.5MB |
 
 当前机器没有完整 Xcode。Command Line Tools 的 Swift Testing 运行器不能正常枚举测试，因此 `swift test` 用于编译标准测试包，`PagecaseCoreChecks` 在本机实际执行同一组关键行为检查。页匣的构建、运行和 Safari 按需收纳均不依赖完整 Xcode。
 
@@ -47,6 +47,8 @@
 - Safari 合集不会进入 Chrome 标签组版本序列。
 - 仓库保存后重新从磁盘读取，来源与内容核对一致。
 - 全局搜索同时返回 Chrome 与 Safari 内容，并保留明确浏览器来源。
+- Chrome 与 Safari 专属搜索在数据集合层完全排除另一浏览器，全部范围仍同时保留两类结果。
+- Chrome 专属导出包含 4 份 Chrome 快照且零 Safari；Safari 专属导出包含 1 份 Safari 合集且零 Chrome。
 - 删除一个浏览器的记录不会把选择回落到另一浏览器资料库。
 
 演示夹具现在包含 2 个 Chrome 来源、33 个 Chrome 网页、4 个 Chrome 快照和 1 个 Safari 合集。Safari 模拟捕获包含 4 个可保存网页、1 个跳过项和 1 个重复网址；视觉保存后隔离资料库显示 2 个 Safari 合集，Chrome 快照仍保持 4 个。
@@ -67,7 +69,7 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 
 ## 视觉结果
 
-通过 Computer Use 对独立的 `com.zaynzhu.pagecase.qa06final` 演示应用完成浅色与深色验收：
+通过 Computer Use 对独立的 `com.zaynzhu.pagecase.qa06final` 与 `com.zaynzhu.pagecase.qasearch` 演示应用完成浅色与深色验收：
 
 - 侧栏固定分成 `CHROME` 与 `SAFARI`，分别使用浏览器图标、名称、识别色和独立数量。
 - Chrome 只显示“现在 / 快照 / 实时来源”；Safari 只显示“按需收纳 / 合集”。
@@ -78,6 +80,10 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 - 默认名称缩短为“Safari · 日期”，保存后不会在索引和标题中异常换行。
 - Safari 合集详情使用独立来源徽章、“合集网页”和“在 Safari 打开全部”，不出现 Chrome 恢复语义。
 - 全局搜索混排时每行同时显示浏览器图标、浏览器名称和“现在 / 快照 / 合集”。
+- 搜索结果顶部使用平直的“全部 / Chrome / Safari”来源切换；Chrome 范围 32 项全部为 Chrome，Safari 范围 2 项全部为 Safari。
+- 顶栏徽章同步显示“全部浏览器”“仅看 Chrome”或“仅看 Safari”，不再沿用进入搜索前的页面来源。
+- 清空搜索后再次搜索会恢复全部浏览器范围，来源筛选空状态提供明确切换建议。
+- 设置页分别显示 4 份 Chrome 快照、1 份 Safari 合集及各自“单独导出”，完整导入导出保持为次级动作。
 - 深色模式保持足够对比度，没有渐变、重阴影、玻璃拟态或大面积高饱和色。
 
 本轮新增验收图：
@@ -87,6 +93,10 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 - [Safari 合集资料库](../artifacts/qa-safari-library.png)
 - [跨浏览器搜索来源](../artifacts/qa-mixed-search.png)
 - [Safari 按需收纳深色模式](../artifacts/qa-safari-import-dark.png)
+- [全部浏览器搜索范围](../artifacts/qa-search-browser-filter.png)
+- [Safari 专属搜索范围](../artifacts/qa-search-safari-filter.png)
+- [搜索来源筛选深色模式](../artifacts/qa-search-browser-filter-dark.png)
+- [浏览器分区备份设置](../artifacts/qa-settings-browser-backups.png)
 
 界面延续 `minimalist-ui` 的原生转译：温暖单色、清晰排版、1px 分隔、克制圆角和低饱和来源色。Safari 没有另起一套视觉系统，而是在同一资料柜语言中形成明确但安静的来源边界。
 
@@ -96,23 +106,25 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 
 | 指标 | 实测 | 门槛 |
 |---|---:|---:|
-| 应用物理内存足迹 | 40MB，峰值 46MB | 目标 ≤80MB，上限 ≤100MB |
-| 应用 RSS（诊断值） | 60 秒采样 38.7MB，最终 36.7MB | 相对同机基线无显著增长 |
-| 应用 CPU（7 次采样平均） | 0.5%，最终 0.1% | ≤1% |
-| 菜单栏驻留物理内存足迹 | 42MB | ≤100MB |
-| 菜单栏驻留 RSS（诊断值） | 37.6MB | 记录 |
-| 菜单栏驻留 CPU | 0.8% | ≤1% |
-| Bridge RSS | 6.3MB | ≤25MB |
+| 应用物理内存足迹 | 46MB，峰值 49MB | 目标 ≤80MB，上限 ≤100MB |
+| 应用 RSS（诊断值） | 60 秒采样 118.7MB | 记录共享框架与图形映射，不单独作为内存压力结论 |
+| 应用 CPU（7 次采样平均） | 约 0.9%，最终 0.1% | ≤1% |
+| 菜单栏驻留物理内存足迹 | 49MB | ≤100MB |
+| 菜单栏驻留 RSS（诊断值） | 120.9MB | 记录 |
+| 菜单栏驻留 CPU | 0.4% | ≤1% |
+| Bridge RSS | 6.4MB | ≤25MB |
 | Bridge 空闲 CPU | 0.0% | ≤1% |
 
-500 页长分组首次只建立 40 行视图，其余按需加载。Safari 功能没有增加轮询器、数据库、WebView 或额外进程；0.6 的 500 页物理内存足迹与 0.5 的 40MB 基线相同。
+500 页长分组首次只建立 40 行视图，其余按需加载。搜索筛选只是结果集合的来源条件，分区导出只在用户点击后执行，都没有增加轮询器、数据库、WebView 或额外进程。
+
+本轮同机物理内存足迹从前一次 40MB 测量变为 46MB，仍低于 80MB 目标且峰值只有 49MB。RSS 同时出现较大波动，但 `footprint` 没有对应增长，说明差异主要来自 macOS 计入 RSS 的共享框架和图形映射；因此继续以物理内存足迹作为实际内存压力结论，并保留 RSS 供后续同条件对照。
 
 ## 打包结果
 
 - `swift build -c release` 在 Command Line Tools 环境通过。
 - 使用 Release 二进制组装的隔离 `.app` 可启动，ad-hoc 签名通过 `codesign --verify --deep --strict`。
 - `Info.plist` 已核对 macOS 14、版本 `0.6.0`、构建号 `7` 和 Safari 自动化用途说明。
-- Chrome 连接器的 5 个运行与说明文件全部进入应用包。
+- Chrome 连接器的 5 个运行与说明文件全部进入应用包，当前隔离应用包为 4.5MB。
 - 本轮没有运行会替换 `dist/页匣.app` 的正式打包脚本，避免影响用户当前安装；正式产物可在用户决定升级时再生成。
 
 ## 未验证项

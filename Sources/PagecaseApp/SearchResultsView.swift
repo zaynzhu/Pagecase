@@ -21,10 +21,13 @@ struct SearchResultsView: View {
               .font(.system(size: 10, design: .monospaced))
               .foregroundStyle(Palette.muted(colorScheme))
           }
-          .padding(.bottom, 20)
+          .padding(.bottom, 12)
+
+          browserFilter
+            .padding(.bottom, 14)
 
           if model.searchResults.isEmpty {
-            Text("没有找到匹配内容。可以尝试网页标题、域名、Chrome 标签组、快照或 Safari 合集名称。")
+            Text(emptyMessage)
               .font(.system(size: 12))
               .foregroundStyle(Palette.muted(colorScheme))
               .padding(.vertical, 30)
@@ -72,6 +75,9 @@ struct SearchResultsView: View {
       .onChange(of: model.searchQuery) { _, _ in
         visibleResultCount = Self.resultBatchSize
       }
+      .onChange(of: model.searchBrowserFilter) { _, _ in
+        visibleResultCount = Self.resultBatchSize
+      }
       .onChange(of: model.selectedSearchResult?.id) { _, selectedId in
         revealSelection(selectedId, proxy: proxy)
       }
@@ -95,6 +101,59 @@ struct SearchResultsView: View {
       }
     } message: {
       Text("将在 Chrome 中按原顺序新建并组合这些网页，不会关闭、移动或改变任何已有标签。")
+    }
+  }
+
+  private var browserFilter: some View {
+    HStack(spacing: 0) {
+      ForEach(SearchBrowserFilter.allCases, id: \.self) { filter in
+        Button {
+          model.selectSearchBrowserFilter(filter)
+        } label: {
+          HStack(spacing: 6) {
+            Image(systemName: filter.symbol)
+              .font(.system(size: 9, weight: .semibold))
+            Text(filter.title)
+              .font(.system(size: 11, weight: .semibold))
+          }
+          .foregroundStyle(filterColor(filter))
+          .padding(.horizontal, 13)
+          .frame(height: 34)
+          .contentShape(Rectangle())
+          .overlay(alignment: .bottom) {
+            Rectangle()
+              .fill(filterColor(filter))
+              .frame(height: model.searchBrowserFilter == filter ? 2 : 0)
+          }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("只显示\(filter.title == "全部" ? "全部浏览器" : filter.title)搜索结果")
+      }
+
+      Spacer()
+    }
+    .overlay(alignment: .bottom) {
+      Rectangle()
+        .fill(Palette.border(colorScheme))
+        .frame(height: 1)
+    }
+  }
+
+  private func filterColor(_ filter: SearchBrowserFilter) -> Color {
+    guard model.searchBrowserFilter == filter else {
+      return Palette.muted(colorScheme)
+    }
+    return filter.browserKind?.accentColor ?? Palette.ink(colorScheme)
+  }
+
+  private var emptyMessage: String {
+    switch model.searchBrowserFilter {
+    case .all:
+      return "没有找到匹配内容。可以尝试网页标题、域名、Chrome 标签组、快照或 Safari 合集名称。"
+    case .chrome:
+      return "Chrome 中没有匹配内容。可以切换到“全部”或只查看 Safari。"
+    case .safari:
+      return "Safari 合集中没有匹配内容。可以切换到“全部”或只查看 Chrome。"
     }
   }
 

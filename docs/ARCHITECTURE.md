@@ -196,6 +196,8 @@ pagecase/
 - `snapshots`
 - 不包含实时现场、命令、结果和本地来源连接状态
 
+`SnapshotRepository.exportLibrary` 接受可选 `browserKind`。未指定时导出完整资料库；指定 Chrome 或 Safari 时，在构建 `LibraryExport` 前按持久化的 `sourceKind` 过滤。过滤发生在领域层，界面不能通过隐藏行来伪造浏览器专属备份。
+
 ### 6.4 Safari 按需捕获
 
 `SystemSafariCapturer` 实现应用内的 `SafariCapturing` 协议：
@@ -339,6 +341,7 @@ Bridge 连接后持续运行：
 - 搜索结果保留一个显式选中标识；上下键可跨 50 项批次继续移动，并自动滚动到选中项。
 - 搜索结果以 `target = page | group` 区分网页与标签组；标签组结果保留来源、快照、窗口、标签组标识和网页数量，不伪造网址。
 - 每条搜索结果同时携带 `sourceKind`；Chrome 和 Safari 可以一起检索，但 UI 必须显示浏览器图标与文字，执行动作时禁止跨来源降级。
+- `SearchEngine` 接受 `SearchBrowserFilter`，在遍历实时来源和快照之前排除非目标浏览器。顶栏、结果筛选和实际结果集合共享同一个模型状态，避免从 Safari 页面进入搜索时仍显示 Safari、结果却混合两种浏览器。
 - 标签组查看请求携带 `live:<sourceId>` 或 `snapshot:<snapshotId>` 作用域，只在对应列表消费一次；消费前会持久化展开状态，随后滚动到稳定的组锚点。
 
 ## 10. 搜索排序
@@ -374,6 +377,7 @@ Bridge 连接后持续运行：
 10. Safari 捕获只能由“读取当前窗口”按钮触发一次，不存在轮询、后台辅助进程或自动重试。
 11. Safari 脚本只读取标题、网址、标签顺序和当前页，不包含关闭、移动、网页脚本执行或内容读取。
 12. Chrome 快照和 Safari 合集的来源字段必须与各自范围一致，不能互相参与覆盖判断、标签组版本序列或浏览器专属动作。
+13. Chrome 或 Safari 专属搜索与专属导出都必须在领域数据集合上过滤，输出中不能出现另一浏览器来源。
 
 ## 12. 可演进边界
 
