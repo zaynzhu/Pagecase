@@ -17,7 +17,7 @@
 | 项目 | 结果 |
 |---|---|
 | `swift build` | 通过 |
-| `swift test --enable-swift-testing --disable-xctest` | 本机测试包构建通过；GitHub Actions 46 项实跑通过 |
+| `swift test --enable-swift-testing --disable-xctest` | 本机测试包构建通过；GitHub Actions 47 项实跑通过 |
 | `swift run PagecaseCoreChecks` | 111 项通过 |
 | Chrome 扩展语法检查 | 通过 |
 | Chrome 扩展 Node 测试 | 13 项通过 |
@@ -26,7 +26,7 @@
 | Safari AppleScript 只编译检查 | `osacompile` 通过，未执行脚本 |
 | Bridge 快照、结构化结果与 ping 往返 | 通过 |
 | Release Swift 构建 | 通过 |
-| GitHub Actions YAML 与本地等价命令 | [macOS 15 最终远端检查全部通过](https://github.com/zaynzhu/Pagecase/actions/runs/31448468575) |
+| GitHub Actions YAML 与本地等价命令 | [macOS 15 最终远端检查全部通过](https://github.com/zaynzhu/Pagecase/actions/runs/31451492033) |
 | 正式 Release `.app` ad-hoc 签名 | 严格验证通过；使用隔离模拟数据从 `open` 启动并正常退出 |
 | 应用版本与构建号 | `0.7.0` / `8` |
 | `NSAppleEventsUsageDescription` | 已包含并核对 |
