@@ -156,6 +156,144 @@ func runChecks() throws -> Int {
   )
   passed += try check(restoreGroup.tabs.count == 3, "恢复预览意外去重快照网页")
 
+  let partialGroup = TabGroup(
+    id: restoreGroup.id,
+    title: restoreGroup.title,
+    color: restoreGroup.color,
+    collapsed: restoreGroup.collapsed,
+    order: restoreGroup.order,
+    tabs: [restoreGroup.tabs[0]]
+  )
+  let partialPresence = SnapshotPresenceEvaluator.evaluate(
+    group: restoreGroup,
+    sourceId: restoreState.source.id,
+    liveStates: [
+      LiveState(
+        source: restoreState.source,
+        windows: [
+          BrowserWindow(
+            id: 10,
+            order: 0,
+            focused: true,
+            groups: [partialGroup],
+            ungroupedTabs: []
+          )
+        ]
+      )
+    ],
+    at: referenceDate
+  )
+  passed += try check(
+    partialPresence.state == .partiallyOpen
+      && partialPresence.openPageCount == 1
+      && partialPresence.closedPageCount == 2,
+    "Chrome 快照在场状态没有按重复网址数量计算"
+  )
+  let allOpenPresence = SnapshotPresenceEvaluator.evaluate(
+    group: restoreGroup,
+    sourceId: restoreState.source.id,
+    liveStates: [
+      LiveState(
+        source: restoreState.source,
+        windows: [
+          BrowserWindow(
+            id: 10,
+            order: 0,
+            focused: true,
+            groups: [restoreGroup],
+            ungroupedTabs: []
+          )
+        ]
+      )
+    ],
+    at: referenceDate
+  )
+  passed += try check(
+    allOpenPresence.state == .allOpen && allOpenPresence.openPageCount == 3,
+    "完整存在的 Chrome 快照网页没有被识别"
+  )
+  let movedGroupId = restoreGroup.id + 1_000
+  let movedGroupTabs = restoreGroup.tabs.enumerated().map { index, page in
+    PageItem(
+      id: page.id + 1_000,
+      windowId: 10,
+      groupId: movedGroupId,
+      index: index,
+      title: page.title,
+      url: page.url
+    )
+  }
+  let originalGroupMissingPresence = SnapshotPresenceEvaluator.evaluate(
+    group: restoreGroup,
+    sourceId: restoreState.source.id,
+    liveStates: [
+      LiveState(
+        source: restoreState.source,
+        windows: [
+          BrowserWindow(
+            id: 10,
+            order: 0,
+            focused: true,
+            groups: [
+              TabGroup(
+                id: movedGroupId,
+                title: restoreGroup.title,
+                color: restoreGroup.color,
+                collapsed: false,
+                order: 0,
+                tabs: movedGroupTabs
+              )
+            ],
+            ungroupedTabs: []
+          )
+        ]
+      )
+    ],
+    at: referenceDate
+  )
+  passed += try check(
+    originalGroupMissingPresence.state == .noneOpen,
+    "其他标签组中的相同网页被误报为原标签组仍存在"
+  )
+  let noneOpenPresence = SnapshotPresenceEvaluator.evaluate(
+    pages: restoreGroup.tabs,
+    sourceId: restoreState.source.id,
+    liveStates: [LiveState(source: restoreState.source, windows: [])],
+    at: referenceDate
+  )
+  passed += try check(
+    noneOpenPresence.state == .noneOpen && noneOpenPresence.openPageCount == 0,
+    "已经离开 Chrome 的快照网页没有被识别"
+  )
+  let stalePresence = SnapshotPresenceEvaluator.evaluate(
+    group: restoreGroup,
+    sourceId: restoreState.source.id,
+    liveStates: [
+      LiveState(
+        source: BrowserSource(
+          id: restoreState.source.id,
+          label: restoreState.source.label,
+          capturedAt: referenceDate.addingTimeInterval(-31)
+        ),
+        windows: restoreState.windows
+      )
+    ],
+    at: referenceDate
+  )
+  passed += try check(
+    stalePresence.state == .unavailable,
+    "过期 Chrome 来源被误报为可靠在场状态"
+  )
+  passed += try check(
+    SnapshotPresenceEvaluator.evaluate(
+      group: restoreGroup,
+      sourceId: restoreState.source.id,
+      liveStates: [safariRestoreImpostor],
+      at: referenceDate
+    ).state == .unavailable,
+    "Safari 现场被错误用于 Chrome 快照在场判断"
+  )
+
   let snapshots = DemoData.snapshots(referenceDate: referenceDate)
   let libraryItems = SnapshotLibraryOrganizer.organize(snapshots)
   let developmentSeries = SnapshotLibraryOrganizer.groupSeries(
@@ -193,6 +331,30 @@ func runChecks() throws -> Int {
       && safariSnapshot.sourceId == SafariCollectionBuilder.sourceId
       && safariSnapshot.sourceLabel == SafariCollectionBuilder.sourceLabel,
     "Safari 合集来源信息不完整"
+  )
+  passed += try check(
+    SnapshotPresenceEvaluator.evaluate(
+      snapshot: safariSnapshot,
+      liveStates: states,
+      at: referenceDate
+    ) == nil,
+    "Safari 合集被错误赋予 Chrome 在场状态"
+  )
+  let emptyChromeSnapshot = SavedSnapshot(
+    id: "empty-presence-snapshot",
+    name: "空快照",
+    createdAt: referenceDate,
+    sourceId: restoreState.source.id,
+    sourceLabel: restoreState.source.label,
+    windows: []
+  )
+  passed += try check(
+    SnapshotPresenceEvaluator.evaluate(
+      snapshot: emptyChromeSnapshot,
+      liveStates: states,
+      at: referenceDate
+    ) == nil,
+    "空 Chrome 快照显示了没有意义的在场状态"
   )
   passed += try check(
     snapshots.filter { $0.sourceKind == .chrome }.count == 4

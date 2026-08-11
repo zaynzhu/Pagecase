@@ -165,6 +165,241 @@ func groupRestorePreviewNeverMixesSafariOrAnotherChromeSource() {
 }
 
 @Test
+func chromeSnapshotPresenceCountsDuplicateURLsAndAllStates() throws {
+  let duplicateURL = "https://example.com/presence-duplicate"
+  let group = TabGroup(
+    id: 70,
+    title: "在场状态",
+    color: .blue,
+    collapsed: false,
+    order: 0,
+    tabs: [
+      PageItem(
+        id: 71,
+        windowId: 60,
+        groupId: 70,
+        index: 0,
+        title: "重复一",
+        url: duplicateURL
+      ),
+      PageItem(
+        id: 72,
+        windowId: 60,
+        groupId: 70,
+        index: 1,
+        title: "重复二",
+        url: duplicateURL
+      ),
+      PageItem(
+        id: 73,
+        windowId: 60,
+        groupId: 70,
+        index: 2,
+        title: "独立网页",
+        url: "https://example.com/presence-only"
+      )
+    ]
+  )
+  let snapshot = SavedSnapshot(
+    id: "presence-snapshot",
+    name: "在场状态快照",
+    createdAt: referenceDate,
+    sourceId: "presence-source",
+    sourceLabel: "Chrome · 在场状态",
+    scope: .group,
+    windows: [
+      BrowserWindow(
+        id: 60,
+        order: 0,
+        focused: true,
+        groups: [group],
+        ungroupedTabs: []
+      )
+    ]
+  )
+  let partialState = LiveState(
+    source: BrowserSource(
+      id: snapshot.sourceId,
+      label: snapshot.sourceLabel,
+      capturedAt: referenceDate
+    ),
+    windows: [
+      BrowserWindow(
+        id: 80,
+        order: 0,
+        focused: true,
+        groups: [],
+        ungroupedTabs: [
+          PageItem(
+            id: 81,
+            windowId: 80,
+            groupId: nil,
+            index: 0,
+            title: "只保留一个重复网址",
+            url: duplicateURL
+          )
+        ]
+      )
+    ]
+  )
+
+  let partial = try #require(
+    SnapshotPresenceEvaluator.evaluate(
+      snapshot: snapshot,
+      liveStates: [partialState],
+      at: referenceDate
+    )
+  )
+  #expect(partial.state == .partiallyOpen)
+  #expect(partial.openPageCount == 1)
+  #expect(partial.closedPageCount == 2)
+
+  let allOpen = SnapshotPresenceEvaluator.evaluate(
+    group: group,
+    sourceId: snapshot.sourceId,
+    liveStates: [
+      LiveState(
+        source: partialState.source,
+        windows: snapshot.windows
+      )
+    ],
+    at: referenceDate
+  )
+  #expect(allOpen.state == .allOpen)
+  #expect(allOpen.openPageCount == 3)
+
+  let movedGroupId = group.id + 1_000
+  let movedGroupTabs = group.tabs.enumerated().map { index, page in
+    PageItem(
+      id: page.id + 1_000,
+      windowId: 80,
+      groupId: movedGroupId,
+      index: index,
+      title: page.title,
+      url: page.url
+    )
+  }
+  let originalGroupMissing = SnapshotPresenceEvaluator.evaluate(
+    group: group,
+    sourceId: snapshot.sourceId,
+    liveStates: [
+      LiveState(
+        source: partialState.source,
+        windows: [
+          BrowserWindow(
+            id: 80,
+            order: 0,
+            focused: true,
+            groups: [
+              TabGroup(
+                id: movedGroupId,
+                title: group.title,
+                color: group.color,
+                collapsed: false,
+                order: 0,
+                tabs: movedGroupTabs
+              )
+            ],
+            ungroupedTabs: []
+          )
+        ]
+      )
+    ],
+    at: referenceDate
+  )
+  #expect(originalGroupMissing.state == .noneOpen)
+  #expect(originalGroupMissing.openPageCount == 0)
+
+  let noneOpen = SnapshotPresenceEvaluator.evaluate(
+    pages: group.tabs,
+    sourceId: snapshot.sourceId,
+    liveStates: [LiveState(source: partialState.source, windows: [])],
+    at: referenceDate
+  )
+  #expect(noneOpen.state == .noneOpen)
+  #expect(noneOpen.openPageCount == 0)
+}
+
+@Test
+func chromeSnapshotPresenceRequiresFreshMatchingChromeSource() throws {
+  let snapshot = try #require(
+    DemoData.snapshots(referenceDate: referenceDate).first(where: {
+      $0.sourceKind == .chrome
+    })
+  )
+  let matchingWindows = snapshot.windows
+  let staleState = LiveState(
+    source: BrowserSource(
+      id: snapshot.sourceId,
+      label: snapshot.sourceLabel,
+      capturedAt: referenceDate.addingTimeInterval(-31)
+    ),
+    windows: matchingWindows
+  )
+  let otherChromeState = LiveState(
+    source: BrowserSource(
+      id: "other-source",
+      label: "Chrome · 其他",
+      capturedAt: referenceDate
+    ),
+    windows: matchingWindows
+  )
+  let safariImpostor = LiveState(
+    source: BrowserSource(
+      id: snapshot.sourceId,
+      kind: .safari,
+      label: "Safari",
+      capturedAt: referenceDate
+    ),
+    windows: matchingWindows
+  )
+
+  #expect(
+    SnapshotPresenceEvaluator.evaluate(
+      snapshot: snapshot,
+      liveStates: [staleState],
+      at: referenceDate
+    )?.state == .unavailable
+  )
+  #expect(
+    SnapshotPresenceEvaluator.evaluate(
+      snapshot: snapshot,
+      liveStates: [otherChromeState, safariImpostor],
+      at: referenceDate
+    )?.state == .unavailable
+  )
+
+  let safariSnapshot = try #require(
+    DemoData.snapshots(referenceDate: referenceDate).first(where: {
+      $0.sourceKind == .safari
+    })
+  )
+  #expect(
+    SnapshotPresenceEvaluator.evaluate(
+      snapshot: safariSnapshot,
+      liveStates: [staleState],
+      at: referenceDate
+    ) == nil
+  )
+
+  let emptyChromeSnapshot = SavedSnapshot(
+    id: "empty-presence-snapshot",
+    name: "空快照",
+    createdAt: referenceDate,
+    sourceId: snapshot.sourceId,
+    sourceLabel: snapshot.sourceLabel,
+    windows: []
+  )
+  #expect(
+    SnapshotPresenceEvaluator.evaluate(
+      snapshot: emptyChromeSnapshot,
+      liveStates: [staleState],
+      at: referenceDate
+    ) == nil
+  )
+}
+
+@Test
 func snapshotLibraryCollectsGroupVersionsWithoutMergingSnapshots() throws {
   let snapshots = DemoData.snapshots(referenceDate: referenceDate)
   let items = SnapshotLibraryOrganizer.organize(snapshots)

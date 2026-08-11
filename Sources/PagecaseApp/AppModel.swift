@@ -424,6 +424,24 @@ final class AppModel: ObservableObject {
     )
   }
 
+  func chromePresence(for snapshot: SavedSnapshot) -> ChromeSnapshotPresence? {
+    SnapshotPresenceEvaluator.evaluate(
+      snapshot: snapshot,
+      liveStates: liveStates
+    )
+  }
+
+  func chromePresence(
+    for group: TabGroup,
+    sourceId: String
+  ) -> ChromeSnapshotPresence {
+    SnapshotPresenceEvaluator.evaluate(
+      group: group,
+      sourceId: sourceId,
+      liveStates: liveStates
+    )
+  }
+
   func chromeSourceLabel(for sourceId: String) -> String {
     liveStates.first(where: {
       $0.source.id == sourceId && $0.source.kind == .chrome

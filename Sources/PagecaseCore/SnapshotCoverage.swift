@@ -50,6 +50,169 @@ public struct GroupSnapshotCoverage: Equatable, Sendable {
   }
 }
 
+public enum ChromeSnapshotPresenceState: Equatable, Sendable {
+  case allOpen
+  case partiallyOpen
+  case noneOpen
+  case unavailable
+}
+
+public struct ChromeSnapshotPresence: Equatable, Sendable {
+  public let state: ChromeSnapshotPresenceState
+  public let snapshotPageCount: Int
+  public let openPageCount: Int
+
+  public init(
+    state: ChromeSnapshotPresenceState,
+    snapshotPageCount: Int,
+    openPageCount: Int
+  ) {
+    self.state = state
+    self.snapshotPageCount = snapshotPageCount
+    self.openPageCount = openPageCount
+  }
+
+  public var closedPageCount: Int {
+    max(snapshotPageCount - openPageCount, 0)
+  }
+}
+
+public enum SnapshotPresenceEvaluator {
+  public static func evaluate(
+    snapshot: SavedSnapshot,
+    liveStates: [LiveState],
+    at date: Date = Date()
+  ) -> ChromeSnapshotPresence? {
+    let snapshotPages = pages(in: snapshot.windows)
+    guard snapshot.sourceKind == .chrome, !snapshotPages.isEmpty else {
+      return nil
+    }
+    return evaluate(
+      pages: snapshotPages,
+      sourceId: snapshot.sourceId,
+      liveStates: liveStates,
+      at: date
+    )
+  }
+
+  public static func evaluate(
+    group: TabGroup,
+    sourceId: String,
+    liveStates: [LiveState],
+    at date: Date = Date()
+  ) -> ChromeSnapshotPresence {
+    guard let liveState = availableChromeState(
+      sourceId: sourceId,
+      liveStates: liveStates,
+      at: date
+    ) else {
+      return unavailablePresence(pageCount: group.tabs.count)
+    }
+    guard let liveGroup = liveState.windows
+      .flatMap(\.groups)
+      .first(where: { $0.id == group.id }) else {
+      return ChromeSnapshotPresence(
+        state: .noneOpen,
+        snapshotPageCount: group.tabs.count,
+        openPageCount: 0
+      )
+    }
+    return presence(
+      expectedPages: group.tabs,
+      availablePages: liveGroup.tabs
+    )
+  }
+
+  public static func evaluate(
+    pages snapshotPages: [PageItem],
+    sourceId: String,
+    liveStates: [LiveState],
+    at date: Date = Date()
+  ) -> ChromeSnapshotPresence {
+    guard let liveState = availableChromeState(
+      sourceId: sourceId,
+      liveStates: liveStates,
+      at: date
+    ) else {
+      return unavailablePresence(pageCount: snapshotPages.count)
+    }
+
+    return presence(
+      expectedPages: snapshotPages,
+      availablePages: pages(in: liveState.windows)
+    )
+  }
+
+  private static func presence(
+    expectedPages: [PageItem],
+    availablePages: [PageItem]
+  ) -> ChromeSnapshotPresence {
+    let openPageCount = matchedItemCount(
+      expectedItems: expectedPages.map(\.url),
+      availableItems: availablePages.map(\.url)
+    )
+    let state: ChromeSnapshotPresenceState
+    if openPageCount == 0 {
+      state = .noneOpen
+    } else if openPageCount == expectedPages.count {
+      state = .allOpen
+    } else {
+      state = .partiallyOpen
+    }
+
+    return ChromeSnapshotPresence(
+      state: state,
+      snapshotPageCount: expectedPages.count,
+      openPageCount: openPageCount
+    )
+  }
+
+  private static func availableChromeState(
+    sourceId: String,
+    liveStates: [LiveState],
+    at date: Date
+  ) -> LiveState? {
+    liveStates.first(where: {
+      $0.source.id == sourceId
+        && $0.source.kind == .chrome
+        && $0.source.isFresh(at: date)
+    })
+  }
+
+  private static func unavailablePresence(pageCount: Int) -> ChromeSnapshotPresence {
+    ChromeSnapshotPresence(
+      state: .unavailable,
+      snapshotPageCount: pageCount,
+      openPageCount: 0
+    )
+  }
+
+  private static func matchedItemCount<Item: Hashable>(
+    expectedItems: [Item],
+    availableItems: [Item]
+  ) -> Int {
+    var available = Dictionary(grouping: availableItems, by: { $0 })
+      .mapValues(\.count)
+    var matched = 0
+
+    for item in expectedItems {
+      guard let count = available[item], count > 0 else {
+        continue
+      }
+      available[item] = count - 1
+      matched += 1
+    }
+
+    return matched
+  }
+
+  private static func pages(in windows: [BrowserWindow]) -> [PageItem] {
+    windows.flatMap { window in
+      window.groups.flatMap(\.tabs) + window.ungroupedTabs
+    }
+  }
+}
+
 public enum SnapshotCoverageEvaluator {
   public static func evaluate(
     liveState: LiveState,

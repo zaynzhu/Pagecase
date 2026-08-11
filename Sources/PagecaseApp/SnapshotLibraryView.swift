@@ -21,10 +21,10 @@ struct SnapshotLibraryView: View {
       } else {
         HSplitView {
           index
-            .frame(minWidth: 220, idealWidth: 260, maxWidth: 300)
+            .frame(minWidth: 180, idealWidth: 230, maxWidth: 280)
 
           detail
-            .frame(minWidth: 520)
+            .frame(minWidth: 400)
         }
         .background(Palette.canvas(colorScheme))
       }
@@ -294,60 +294,21 @@ struct SnapshotLibraryView: View {
   @ViewBuilder
   private var detail: some View {
     if let snapshot = model.selectedSnapshot {
+      let snapshotPresence = model.chromePresence(for: snapshot)
+
       ScrollViewReader { proxy in
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 22) {
-            HStack(alignment: .top) {
-              VStack(alignment: .leading, spacing: 7) {
-                BrowserModeBadge(
-                  kind: snapshot.sourceKind,
-                  label: snapshot.sourceKind == .safari ? "本地合集" : "本地快照"
-                )
-
-                Text(snapshot.name)
-                  .font(.system(size: 29, weight: .semibold, design: .serif))
-
-                Text(snapshotDetailMetadata(snapshot))
-                  .font(.system(size: 11, design: .monospaced))
-                  .foregroundStyle(Palette.muted(colorScheme))
+            ViewThatFits(in: .horizontal) {
+              HStack(alignment: .top, spacing: 16) {
+                snapshotSummary(snapshot, presence: snapshotPresence)
+                Spacer(minLength: 0)
+                snapshotActions(snapshot)
               }
 
-              Spacer()
-
-              HStack(spacing: 8) {
-                if snapshot.sourceKind == .safari {
-                  Button {
-                    openCollectionTarget = snapshot
-                  } label: {
-                    Label("在 Safari 打开全部", systemImage: "safari")
-                      .font(.system(size: 11, weight: .medium))
-                  }
-                  .buttonStyle(.bordered)
-                  .controlSize(.small)
-                }
-
-                Menu {
-                  Button("重命名") {
-                    renameTarget = snapshot
-                  }
-                } label: {
-                  Image(systemName: "ellipsis")
-                    .frame(width: 28, height: 28)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help(snapshot.sourceKind == .safari ? "更多合集操作" : "更多快照操作")
-
-                Button(role: .destructive) {
-                  deleteTarget = snapshot
-                } label: {
-                  Label(snapshot.sourceKind == .safari ? "删除合集" : "删除快照", systemImage: "trash")
-                    .font(.system(size: 11, weight: .medium))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help(snapshot.sourceKind == .safari ? "从本机删除这份 Safari 合集" : "从本机删除这份 Chrome 快照")
-                .accessibilityHint("删除前会再次确认，不会影响浏览器")
+              VStack(alignment: .leading, spacing: 14) {
+                snapshotSummary(snapshot, presence: snapshotPresence)
+                snapshotActions(snapshot)
               }
             }
 
@@ -378,6 +339,15 @@ struct SnapshotLibraryView: View {
                   )
                 },
                 groupCoverage: { _ in nil },
+                chromePresence: { group in
+                  guard snapshot.sourceKind == .chrome else {
+                    return nil
+                  }
+                  return model.chromePresence(
+                    for: group,
+                    sourceId: snapshot.sourceId
+                  )
+                },
                 groupActionTitle: { _ in
                   snapshot.sourceKind == .chrome
                     ? model.snapshotGroupActionTitle(for: snapshot.sourceId)
@@ -399,6 +369,7 @@ struct SnapshotLibraryView: View {
                     )
                   )
                 },
+                collapsedTitle: "保存时已折叠",
                 ungroupedTitle: snapshot.sourceKind == .safari ? "合集网页" : "未分组"
               )
             }
@@ -421,6 +392,72 @@ struct SnapshotLibraryView: View {
         title: model.libraryBrowserKind == .safari ? "选择一个合集" : "选择一个快照",
         message: ""
       )
+    }
+  }
+
+  private func snapshotSummary(
+    _ snapshot: SavedSnapshot,
+    presence: ChromeSnapshotPresence?
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 7) {
+      BrowserModeBadge(
+        kind: snapshot.sourceKind,
+        label: snapshot.sourceKind == .safari ? "本地合集" : "本地快照"
+      )
+
+      Text(snapshot.name)
+        .font(.system(size: 29, weight: .semibold, design: .serif))
+
+      Text(snapshotDetailMetadata(snapshot))
+        .font(.system(size: 11, design: .monospaced))
+        .foregroundStyle(Palette.muted(colorScheme))
+
+      if let presence {
+        ChromePresenceLabel(
+          presence: presence,
+          showsDetail: true
+        )
+      }
+    }
+  }
+
+  private func snapshotActions(_ snapshot: SavedSnapshot) -> some View {
+    HStack(spacing: 8) {
+      if snapshot.sourceKind == .safari {
+        Button {
+          openCollectionTarget = snapshot
+        } label: {
+          Label("在 Safari 打开全部", systemImage: "safari")
+            .font(.system(size: 11, weight: .medium))
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .fixedSize()
+      }
+
+      Menu {
+        Button("重命名") {
+          renameTarget = snapshot
+        }
+      } label: {
+        Image(systemName: "ellipsis")
+          .frame(width: 28, height: 28)
+      }
+      .menuStyle(.borderlessButton)
+      .fixedSize()
+      .help(snapshot.sourceKind == .safari ? "更多合集操作" : "更多快照操作")
+
+      Button(role: .destructive) {
+        deleteTarget = snapshot
+      } label: {
+        Label(snapshot.sourceKind == .safari ? "删除合集" : "删除快照", systemImage: "trash")
+          .font(.system(size: 11, weight: .medium))
+      }
+      .buttonStyle(.bordered)
+      .controlSize(.small)
+      .fixedSize()
+      .help(snapshot.sourceKind == .safari ? "从本机删除这份 Safari 合集" : "从本机删除这份 Chrome 快照")
+      .accessibilityHint("删除前会再次确认，不会影响浏览器")
     }
   }
 

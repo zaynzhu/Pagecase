@@ -288,6 +288,130 @@ struct NoticeView: View {
   }
 }
 
+struct ChromePresenceLabel: View {
+  enum Context {
+    case snapshot
+    case group
+  }
+
+  let presence: ChromeSnapshotPresence
+  var showsDetail = false
+  var context: Context = .snapshot
+
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    HStack(spacing: 5) {
+      Image(systemName: symbol)
+        .font(.system(size: 9, weight: .semibold))
+        .foregroundStyle(statusColor)
+
+      Text(Self.title(for: presence, context: context))
+        .font(.system(size: 10, weight: .medium))
+        .foregroundStyle(statusColor)
+
+      if showsDetail {
+        Text("· \(detail)")
+          .font(.system(size: 10))
+          .foregroundStyle(Palette.muted(colorScheme))
+      }
+    }
+    .help(helpText)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(
+      "Chrome 在场状态，\(Self.title(for: presence, context: context))，\(detail)"
+    )
+  }
+
+  static func title(
+    for presence: ChromeSnapshotPresence,
+    context: Context
+  ) -> String {
+    switch presence.state {
+    case .allOpen:
+      return context == .group ? "原组仍在 Chrome" : "全部仍在 Chrome"
+    case .partiallyOpen:
+      return context == .group
+        ? "\(presence.openPageCount) / \(presence.snapshotPageCount) 仍在原组"
+        : "\(presence.openPageCount) / \(presence.snapshotPageCount) 仍在 Chrome"
+    case .noneOpen:
+      return context == .group ? "原组已离开" : "已离开 Chrome"
+    case .unavailable:
+      return "暂时无法确认"
+    }
+  }
+
+  private var symbol: String {
+    switch presence.state {
+    case .allOpen:
+      return BrowserKind.chrome.symbol
+    case .partiallyOpen:
+      return "circle.lefthalf.filled"
+    case .noneOpen:
+      return "checkmark.circle.fill"
+    case .unavailable:
+      return "questionmark.circle"
+    }
+  }
+
+  private var detail: String {
+    switch presence.state {
+    case .allOpen:
+      return context == .group
+        ? "组内网页和保存时一致"
+        : "这些网页仍在同一 Chrome 来源中"
+    case .partiallyOpen:
+      return context == .group
+        ? "\(presence.closedPageCount) 个已离开原组"
+        : "\(presence.closedPageCount) 个已离开"
+    case .noneOpen:
+      return context == .group
+        ? "原组的 \(presence.snapshotPageCount) 个网页仍保存在快照中"
+        : "\(presence.snapshotPageCount) 个网页只保存在快照中"
+    case .unavailable:
+      return "来源未连接或实时数据已过期"
+    }
+  }
+
+  private var helpText: String {
+    switch presence.state {
+    case .allOpen:
+      return context == .group
+        ? "最近一次可用的同一 Chrome 来源仍包含保存时的原标签组，且组内网页完整。关闭仍由你在 Chrome 完成。"
+        : "最近一次可用的同一 Chrome 来源仍包含快照中的全部网页。关闭仍由你在 Chrome 完成。"
+    case .partiallyOpen:
+      return context == .group
+        ? "原标签组仍存在，但只保留 \(presence.openPageCount) 个保存时的网页；另外 \(presence.closedPageCount) 个已经离开原组。"
+        : "最近一次可用的同一 Chrome 来源仍包含 \(presence.openPageCount) 个快照网页；另外 \(presence.closedPageCount) 个已经离开。"
+    case .noneOpen:
+      return context == .group
+        ? "最近一次可用的同一 Chrome 来源已经找不到保存时的原标签组；本地快照仍完整保留。"
+        : "最近一次可用的同一 Chrome 来源已经找不到这些网页；本地快照仍完整保留。"
+    case .unavailable:
+      return "同一 Chrome 来源未连接或实时数据已经过期，因此不会推测网页是否已经关闭。"
+    }
+  }
+
+  private var statusColor: Color {
+    switch presence.state {
+    case .allOpen:
+      return colorScheme == .dark
+        ? Color(red: 0.45, green: 0.69, blue: 0.86)
+        : BrowserKind.chrome.accentColor
+    case .partiallyOpen:
+      return colorScheme == .dark
+        ? Color(red: 0.88, green: 0.70, blue: 0.34)
+        : Color(red: 0.63, green: 0.43, blue: 0.08)
+    case .noneOpen:
+      return colorScheme == .dark
+        ? Color(red: 0.49, green: 0.75, blue: 0.52)
+        : Color(red: 0.20, green: 0.49, blue: 0.25)
+    case .unavailable:
+      return Palette.muted(colorScheme)
+    }
+  }
+}
+
 struct SnapshotNameSheet: View {
   let title: String
   let initialName: String

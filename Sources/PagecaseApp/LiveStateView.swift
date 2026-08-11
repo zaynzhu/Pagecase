@@ -119,6 +119,7 @@ struct LiveStateView: View {
                         LiveGroupKey(windowId: window.id, groupId: group.id)
                       ]
                     },
+                    chromePresence: { _ in nil },
                     groupActionTitle: { group in
                       groupActionTitle(
                         for: groupCoverages[
@@ -550,9 +551,11 @@ struct WindowSection: View {
   let isGroupExpanded: (Int?) -> Bool
   let toggleGroupExpansion: (Int?) -> Void
   let groupCoverage: (TabGroup) -> GroupSnapshotCoverage?
+  let chromePresence: (TabGroup) -> ChromeSnapshotPresence?
   let groupActionTitle: (TabGroup) -> String?
   let groupActionEnabled: (TabGroup) -> Bool
   let groupAction: ((TabGroup) -> Void)?
+  var collapsedTitle = "Chrome 中已折叠"
   var ungroupedTitle = "未分组"
 
   @Environment(\.colorScheme) private var colorScheme
@@ -593,6 +596,8 @@ struct WindowSection: View {
               toggleGroupExpansion(group.id)
             },
             saveCoverage: groupCoverage(group),
+            chromePresence: chromePresence(group),
+            collapsedTitle: collapsedTitle,
             actionTitle: actionTitle,
             actionEnabled: actionEnabled,
             action: action,
@@ -616,6 +621,8 @@ struct WindowSection: View {
               toggleGroupExpansion(nil)
             },
             saveCoverage: nil,
+            chromePresence: nil,
+            collapsedTitle: collapsedTitle,
             actionTitle: actionTitle,
             actionEnabled: actionEnabled,
             action: action,
@@ -639,6 +646,8 @@ struct PageGroupView: View {
   let isExpanded: Bool
   let toggleExpansion: () -> Void
   let saveCoverage: GroupSnapshotCoverage?
+  let chromePresence: ChromeSnapshotPresence?
+  let collapsedTitle: String
   let actionTitle: String
   let actionEnabled: Bool
   let action: (PageItem) -> Void
@@ -673,8 +682,15 @@ struct PageGroupView: View {
                 groupCoverageLabel(saveCoverage)
               }
 
+              if let chromePresence {
+                ChromePresenceLabel(
+                  presence: chromePresence,
+                  context: .group
+                )
+              }
+
               if collapsed {
-                Text("Chrome 中已折叠")
+                Text(collapsedTitle)
                   .font(.system(size: 10))
                   .foregroundStyle(Palette.muted(colorScheme))
               }
@@ -690,7 +706,7 @@ struct PageGroupView: View {
             .contentShape(Rectangle())
           }
           .buttonStyle(.plain)
-          .accessibilityLabel("\(title)，\(pages.count) 个网页")
+          .accessibilityLabel(groupAccessibilityLabel)
           .accessibilityValue(isExpanded ? "已展开" : "已折叠")
           .accessibilityHint(isExpanded ? "折叠标签组" : "展开标签组")
 
@@ -769,6 +785,13 @@ struct PageGroupView: View {
 
   private var hasMorePages: Bool {
     visiblePageCount < pages.count
+  }
+
+  private var groupAccessibilityLabel: String {
+    guard let chromePresence else {
+      return "\(title)，\(pages.count) 个网页"
+    }
+    return "\(title)，\(pages.count) 个网页，\(ChromePresenceLabel.title(for: chromePresence, context: .group))"
   }
 
   private func groupCoverageLabel(_ coverage: GroupSnapshotCoverage) -> some View {
