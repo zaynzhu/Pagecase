@@ -8,7 +8,7 @@
 
 ## 结论
 
-0.6 完成 Safari 按需收纳、Safari 合集、持久化浏览器来源，以及 Chrome／Safari 明确分区。导入增加只读分区预览和来源选择，确认前不写入；Chrome 实时页增加“全部 / 需保存 / 已收纳”状态筛选。Chrome 快照进一步显示整份快照仍在浏览器中的网页数量，以及保存时原标签组的在场状态；未知来源不作关闭猜测。Chrome 整组恢复保留来源、重复网址、新建数量和内存影响预览，并在执行后用结构化回执区分完整成功、部分完成、失败与超时。Safari 只在用户点击时读取最前方窗口；没有插件、后台轮询或常驻辅助进程，也不显示或参与 Chrome 在场状态，两种浏览器的资料库、打开流程与结果反馈保持独立。
+0.7 在既有 Chrome／Safari 分区、按需保存和恢复闭环上增加 Chrome“收纳总览”与恢复组持续核对。快照索引按标签组语境汇总已离开、部分仍在、全部仍在与待确认；整组恢复结果新增 Chrome 返回的新组标识，并按来源、快照和原组原子保存，因此应用重启后仍能显示“已恢复为新组”。Safari 只在用户点击时读取最前方窗口；没有插件、后台轮询或常驻辅助进程，也不显示或参与 Chrome 总览和恢复组状态。
 
 自动化、视觉和性能验收全部使用独立应用标识、临时数据目录与模拟浏览器数据。没有加载扩展、注册真实 Native Messaging Host、触发 Apple Events 权限，也没有读取或操作用户当前的 Chrome、Safari 和现有 `dist/页匣.app`。
 
@@ -17,8 +17,8 @@
 | 项目 | 结果 |
 |---|---|
 | `swift build` | 通过 |
-| `swift test --enable-swift-testing --disable-xctest` | 测试包构建通过 |
-| `swift run PagecaseCoreChecks` | 106 项通过 |
+| `swift test --enable-swift-testing --disable-xctest` | 本机测试包构建通过；GitHub Actions 46 项实跑通过 |
+| `swift run PagecaseCoreChecks` | 109 项通过 |
 | Chrome 扩展语法检查 | 通过 |
 | Chrome 扩展 Node 测试 | 13 项通过 |
 | Chrome 危险 API、分组恢复与网络扫描 | 通过，禁止项零命中 |
@@ -26,12 +26,12 @@
 | Safari AppleScript 只编译检查 | `osacompile` 通过，未执行脚本 |
 | Bridge 快照、结构化结果与 ping 往返 | 通过 |
 | Release Swift 构建 | 通过 |
-| GitHub Actions YAML 与本地等价命令 | 语法通过，等价检查全部通过；首次远程运行待推送 |
-| 隔离 Release `.app` ad-hoc 签名 | 严格验证通过 |
-| 应用版本与构建号 | `0.6.0` / `7` |
+| GitHub Actions YAML 与本地等价命令 | [macOS 15 远端检查全部通过](https://github.com/zaynzhu/Pagecase/actions/runs/31448047520) |
+| 隔离 Release 性能 `.app` ad-hoc 签名 | 严格验证通过；仅作临时验收，不是第 4 步预览包 |
+| 应用版本与构建号 | `0.7.0` / `8` |
 | `NSAppleEventsUsageDescription` | 已包含并核对 |
 | `.app` 内置 Chrome 扩展文件 | 5 项齐全 |
-| 隔离 Release 应用体积 | 5.1MB |
+| 隔离性能验收包体积 | 5.3MB；正式预览包尚未构建 |
 
 当前机器没有完整 Xcode。Command Line Tools 的 Swift Testing 运行器不能正常枚举测试，因此 `swift test` 用于编译标准测试包，`PagecaseCoreChecks` 在本机实际执行同一组关键行为检查。页匣的构建、运行和 Safari 按需收纳均不依赖完整 Xcode。
 
@@ -48,11 +48,14 @@
 - Safari 合集不会进入 Chrome 标签组版本序列。
 - Chrome 快照在场状态只使用同一、仍新鲜的 Chrome 来源；完整网址按重复数量核对，准确区分全部仍在、部分仍在和已经离开。
 - 快照汇总允许网页位于该来源任意位置；标签组状态必须先命中保存时的原标签组标识，再计算组内剩余网页。原组缺失时不会用其他组或未分组网页冒充。
+- 原组缺失后只允许扩展明确返回并持久保存的新组标识接续核对；恢复组完整时显示“已恢复为新组”，部分或离开时使用恢复组专属文案。
+- 恢复组索引按 Chrome 来源、快照和原组隔离；重复恢复只替换同一条映射，另一 Chrome 来源不受影响，Safari 完全不进入该文件。
+- Chrome 收纳总览在领域层按标签组语境统计 4 份 Chrome 快照，并在计数前排除 Safari 合集；索引行、详情组状态和总览保持一致。
 - 来源缺失、来源过期、另一 Chrome 来源和 Safari 来源均返回无法确认；Safari 合集与空 Chrome 快照不产生 Chrome 在场状态。
 - Chrome 标签组收纳状态继续复用严格覆盖判断；保存一个标签组后从磁盘核对，计数从“0 / 3”更新为“1 / 3”，需保存集合从 3 组减少为 2 组。
 - Chrome 恢复预览只匹配同一 `sourceId` 的 Chrome 实时来源；相同网址按重复次数计数，Safari 或另一 Chrome 来源不会混入。
 - 恢复预览只报告当前相同网址，不删减或改写快照网页列表；最终恢复数量始终等于原标签组网页数。
-- 扩展结果准确返回动作、已创建数量、是否成组以及 `validation`、`creatingTabs`、`groupingTabs`、`updatingGroup` 失败阶段。
+- 扩展结果准确返回动作、已创建数量、是否成组、新组标识以及 `validation`、`creatingTabs`、`groupingTabs`、`updatingGroup` 失败阶段。
 - 恢复回执先核对命令标识、Chrome 来源与动作；完整创建且成组为成功，已经创建标签或成组后更新失败为部分完成，零副作用错误为失败，30 秒无结果为超时。
 - 旧版缺少结构化字段的成功结果继续可读；来源或动作错配的结果不会被当成本次恢复成功。
 - 部分完成和超时都不会触发自动清理或重试，已经创建的标签保持在 Chrome 中供用户核对。
@@ -82,7 +85,7 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 
 ## 视觉结果
 
-通过 Computer Use 对独立的 `com.zaynzhu.pagecase.qa06final`、`com.zaynzhu.pagecase.qasearch`、`com.zaynzhu.pagecase.qaimport`、`com.zaynzhu.pagecase.qareadiness`、`com.zaynzhu.pagecase.qafindaudit` 与 `com.zaynzhu.pagecase.qapresence` 演示应用完成浅色与深色验收：
+通过 Computer Use 对既有隔离演示应用和本轮独立的 `com.zaynzhu.pagecase.qa` 验收应用完成浅色与深色核对：
 
 - 侧栏固定分成 `CHROME` 与 `SAFARI`，分别使用浏览器图标、名称、识别色和独立数量。
 - Chrome 只显示“现在 / 快照 / 实时来源”；Safari 只显示“按需收纳 / 合集”。
@@ -114,8 +117,10 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 - Safari 专属搜索的两个网页动作均以单行“Safari 打开”显示；浅色和深色来源提示都通过对比度与可访问性文字核对，没有只靠蓝紫颜色区分。
 - Chrome 完整现场快照显示“5 / 22 仍在 Chrome”；原开发组完整保留、AI 工具组显示“1 / 3 仍在原组”，缺失的原组显示“原组已离开”。
 - Chrome 标签组快照同时显示整份网页状态和原组状态；空快照不出现无意义的零网页状态，过期来源在标题和组内均显示“暂时无法确认”。
+- Chrome 快照索引顶部以四列平直总览显示 1 份已离开、0 份部分、3 份仍在和 0 份待确认；标签组最新版同步显示“已恢复为新组”，较早版本仍准确显示“原组已离开”。
+- 应用从 `chrome-restored-groups.json` 重启读取恢复映射后仍显示新组状态；删除映射夹具后不进行网址猜测。
 - Safari 合集页面和可访问性树完全没有 Chrome 在场状态、原组状态或蓝黄绿状态语义，仍只提供 Safari 打开与合集管理动作。
-- `860 × 560` 最小窗口下，Chrome 与 Safari 资料库标题按需换行；“在 Safari 打开全部”“删除合集／快照”和“恢复整组”保持完整可见，没有被压缩成省略号。
+- `860 × 560` 最小窗口下，“Chrome 快照”和四项总览保持完整单行，版本日期没有破碎换行；“在 Safari 打开全部”“删除合集／快照”和“恢复整组”保持完整可见。
 
 本轮新增验收图：
 
@@ -149,6 +154,9 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 - [Safari 合集不显示 Chrome 在场状态](../artifacts/qa-safari-presence-separated.png)
 - [Chrome 快照在场状态深色模式](../artifacts/qa-chrome-presence-dark.png)
 - [Chrome 快照最小窗口](../artifacts/qa-chrome-presence-narrow.png)
+- [Chrome 收纳总览与恢复新组](../artifacts/qa-chrome-overview-restored-group.jpg)
+- [Chrome 收纳总览与恢复新组深色模式](../artifacts/qa-chrome-overview-restored-group-dark.jpg)
+- [Chrome 收纳总览与恢复新组最小窗口](../artifacts/qa-chrome-overview-restored-group-narrow.jpg)
 - [Safari 合集最小窗口](../artifacts/qa-safari-presence-narrow.png)
 
 界面延续 `minimalist-ui` 的原生转译：温暖单色、清晰排版、1px 分隔、克制圆角和低饱和来源色。Safari 没有另起一套视觉系统，而是在同一资料柜语言中形成明确但安静的来源边界。
@@ -159,30 +167,30 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 
 | 指标 | 实测 | 门槛 |
 |---|---:|---:|
-| 应用物理内存足迹 | 39.6MB，峰值 39.9MB | 目标 ≤80MB，上限 ≤100MB |
-| 应用 RSS（`ps` 诊断值） | 60 秒后约 37.5MB，`top` 显示 40MB | 记录，不单独作为内存压力结论 |
-| 应用 CPU（10 次稳定采样平均） | 约 0.13%，最终 0.1% | ≤1% |
-| 菜单栏驻留物理内存足迹 | 47MB | ≤100MB |
-| 菜单栏驻留 RSS（诊断值） | 107.9MB | 记录 |
-| 菜单栏驻留 CPU | 0.0% | ≤1% |
-| Bridge RSS | 7.6MB | ≤25MB |
+| 应用物理内存足迹 | 40MB，峰值 41MB | 目标 ≤80MB，上限 ≤100MB |
+| 应用 RSS（`ps` 诊断值） | 约 47.1MB | 记录，不单独作为内存压力结论 |
+| 应用 CPU（10 次稳定采样平均） | 0.19%，最终 0.0% | ≤1% |
+| 菜单栏驻留物理内存足迹 | 46MB，峰值 47MB | ≤100MB |
+| 菜单栏驻留 RSS（诊断值） | 40.2MB | 记录 |
+| 菜单栏驻留 CPU | 10 次平均 0.03%，最终 0.0% | ≤1% |
+| Bridge 物理内存足迹 | 4.1MB | ≤25MB |
+| Bridge RSS | 5.9MB | ≤25MB |
 | Bridge 空闲 CPU | 0.0% | ≤1% |
 
 500 页长分组首次只建立 40 行视图，其余按需加载。收纳状态筛选只对内存中的 Chrome 标签组和已有快照求值；搜索筛选只是结果集合的来源条件，分区导出和导入预览都只在用户点击后执行，没有增加轮询器、数据库、WebView 或额外进程。
 
-本轮同机 500 页 Release 进程在空闲 60 秒后物理内存足迹为 39.6MB、峰值 39.9MB，`ps` RSS 约 37.5MB；10 次稳定 CPU 采样平均约 0.13%，最终采样为 0.1%。与上一轮约 40MB 的物理内存足迹相当，没有出现内存回归，仍明显低于 80MB 目标。在场判断只在展示已选 Chrome 快照时比较内存中的现有数据，没有增加轮询器、数据库、WebView 或额外常驻进程。
+本轮同机 500 页 Release 进程在空闲超过 60 秒后物理内存足迹为 40MB、峰值 41MB，`ps` RSS 约 47.1MB；10 次稳定 CPU 采样平均 0.19%，最终为 0.0%。关闭主窗口后，菜单栏驻留物理内存足迹为 46MB、峰值 47MB，10 次 CPU 平均 0.03%。与上一轮约 40MB 的应用足迹相当，没有出现物理内存回归；新增总览只在视图求值时比较内存中的现有数据，没有增加轮询器、数据库、WebView 或额外常驻进程。
 
 ## 打包结果
 
 - `swift build -c release` 在 Command Line Tools 环境通过。
-- 使用 Release 二进制组装的隔离 `.app` 可启动，ad-hoc 签名通过 `codesign --verify --deep --strict`。
-- `Info.plist` 已核对 macOS 14、版本 `0.6.0`、构建号 `7` 和 Safari 自动化用途说明。
-- Chrome 连接器的 5 个运行与说明文件全部进入应用包，当前隔离应用包为 5.1MB。
-- 本轮没有运行会替换 `dist/页匣.app` 的正式打包脚本，避免影响用户当前安装；正式产物可在用户决定升级时再生成。
+- 使用 Release 二进制组装的临时性能 `.app` 可启动，独立标识与 ad-hoc 签名均通过严格验证；该包只用于第 3 步，不作为预览交付。
+- 源 `Info.plist` 已核对 macOS 14、版本 `0.7.0`、构建号 `8` 和 Safari 自动化用途说明。
+- 本轮没有运行会替换 `dist/页匣.app` 的正式打包脚本，也没有启动或覆盖用户已经退出的正式应用。
+- 当前扩展源码为 `0.3.0`，最终 `.app` 内置文件与预览包体积留到第 4 步构建时核对。
 
 ## 未验证项
 
-- GitHub Actions 工作流推送后的首次远程运行结果。
 - 真实 Safari 首次自动化权限提示与授权路径。
 - 从真实 Safari 最前方窗口读取标题、网址、顺序和当前页。
 - 从真实 Safari 合集打开单页或打开全部。
