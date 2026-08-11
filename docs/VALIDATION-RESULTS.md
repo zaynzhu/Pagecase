@@ -10,7 +10,7 @@
 
 0.7 在既有 Chrome／Safari 分区、按需保存和恢复闭环上增加 Chrome“收纳总览”与恢复组持续核对。快照索引按标签组语境汇总已离开、部分仍在、全部仍在与待确认；整组恢复结果新增 Chrome 返回的新组标识，并按来源、快照和原组原子保存，因此应用重启后仍能显示“已恢复为新组”。Safari 只在用户点击时读取最前方窗口；没有插件、后台轮询或常驻辅助进程，也不显示或参与 Chrome 总览和恢复组状态。
 
-自动化、视觉和性能验收全部使用独立应用标识、临时数据目录与模拟浏览器数据。没有加载扩展、注册真实 Native Messaging Host、触发 Apple Events 权限，也没有读取或操作用户当前的 Chrome、Safari 和现有 `dist/页匣.app`。
+自动化、视觉和性能验收全部使用独立应用标识、临时数据目录与模拟浏览器数据。第 4 步在这些验收通过后才备份并替换 `dist/页匣.app`，同时更新页匣本地准备的连接器文件；没有加载或重载真实 Chrome 扩展、改写现有 Native Messaging Host、触发 Apple Events 权限，也没有读取或操作用户当前的 Chrome 与 Safari。
 
 ## 自动化结果
 
@@ -26,12 +26,13 @@
 | Safari AppleScript 只编译检查 | `osacompile` 通过，未执行脚本 |
 | Bridge 快照、结构化结果与 ping 往返 | 通过 |
 | Release Swift 构建 | 通过 |
-| GitHub Actions YAML 与本地等价命令 | [macOS 15 远端检查全部通过](https://github.com/zaynzhu/Pagecase/actions/runs/31448047520) |
-| 隔离 Release 性能 `.app` ad-hoc 签名 | 严格验证通过；仅作临时验收，不是第 4 步预览包 |
+| GitHub Actions YAML 与本地等价命令 | [macOS 15 最终远端检查全部通过](https://github.com/zaynzhu/Pagecase/actions/runs/31448468575) |
+| 正式 Release `.app` ad-hoc 签名 | 严格验证通过；使用隔离模拟数据从 `open` 启动并正常退出 |
 | 应用版本与构建号 | `0.7.0` / `8` |
 | `NSAppleEventsUsageDescription` | 已包含并核对 |
 | `.app` 内置 Chrome 扩展文件 | 5 项齐全 |
-| 隔离性能验收包体积 | 5.3MB；正式预览包尚未构建 |
+| 正式应用体积 | 5.6MB |
+| 回退副本 | `0.2.1` / `3`，严格签名核对通过，3.4MB |
 
 当前机器没有完整 Xcode。Command Line Tools 的 Swift Testing 运行器不能正常枚举测试，因此 `swift test` 用于编译标准测试包，`PagecaseCoreChecks` 在本机实际执行同一组关键行为检查。页匣的构建、运行和 Safari 按需收纳均不依赖完整 Xcode。
 
@@ -184,17 +185,21 @@ Safari 单页打开和“打开全部”也只由用户点击触发；演示模�
 ## 打包结果
 
 - `swift build -c release` 在 Command Line Tools 环境通过。
-- 使用 Release 二进制组装的临时性能 `.app` 可启动，独立标识与 ad-hoc 签名均通过严格验证；该包只用于第 3 步，不作为预览交付。
-- 源 `Info.plist` 已核对 macOS 14、版本 `0.7.0`、构建号 `8` 和 Safari 自动化用途说明。
-- 本轮没有运行会替换 `dist/页匣.app` 的正式打包脚本，也没有启动或覆盖用户已经退出的正式应用。
-- 当前扩展源码为 `0.3.0`，最终 `.app` 内置文件与预览包体积留到第 4 步构建时核对。
+- 第 4 步先生成独立预览包，核对版本、arm64 架构、二进制 UUID、五个扩展文件、ad-hoc 签名和隔离启动；确认通过后才替换正式应用。
+- 正式 `scripts/build-app.sh` 在仅安装 Command Line Tools 的当前环境成功，生成 5.6MB 的 `dist/页匣.app`。
+- 正式包已核对 macOS 14、标识 `com.zaynzhu.pagecase`、版本 `0.7.0`、构建号 `8`、Safari 自动化用途说明与应用图标。
+- 正式应用通过 `codesign --verify --deep --strict`，主程序和 Bridge 的 UUID 与本次 Release 构建一致；使用 `PAGECASE_DATA_ROOT` 和 `PAGECASE_NATIVE_HOST_ROOT` 隔离后从 `open` 启动成功并正常退出。
+- 替换前的 `0.2.1` / `3` 应用保存在 `dist/回退/页匣-0.2.1-build3-20260811.app`，严格签名仍通过，可直接用于回退。
+- 现有 Native Messaging Host 继续指向不变的 `dist/页匣.app/Contents/MacOS/PagecaseBridge`，扩展标识授权没有被改写。
+- 页匣本地准备的 Chrome 连接器已从 `0.1.0` 原子更新为 `0.3.0`，旧文件保存在 `Application Support/Pagecase/ExtensionBackups/ChromeExtension-0.1.0-20260811`；本轮没有替用户重载 Chrome 扩展。
+- 正式应用在交付时保持退出，临时预览包和隔离启动数据已移入废纸篓。
 
 ## 未验证项
 
 - 真实 Safari 首次自动化权限提示与授权路径。
 - 从真实 Safari 最前方窗口读取标题、网址、顺序和当前页。
 - 从真实 Safari 合集打开单页或打开全部。
-- 自动化加载真实 Chrome 扩展或注册 Native Messaging Host。
+- 在 Chrome 扩展管理页重载本地 `0.3.0` 连接器，并核对重新连接。
 - 对真实 Chrome 标签执行定位、打开和恢复整组。
 - Developer ID 正式签名、公证与自动更新。
 
