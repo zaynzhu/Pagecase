@@ -132,11 +132,9 @@ struct ChromeRestoreReceiptView: View {
 
   private var groupValue: String {
     switch receipt.groupCreated {
-    case true:
-      return "已成组"
-    case false:
-      return "未成组"
-    case nil:
+    case let .some(isCreated):
+      return isCreated ? "已成组" : "未成组"
+    case .none:
       return "待确认"
     }
   }
