@@ -65,7 +65,8 @@ pagecase/
 │   ├── check-bridge.mjs
 │   ├── install-native-host.sh
 │   ├── uninstall-native-host.sh
-│   └── validate-extension.sh
+│   ├── validate-extension.sh
+│   └── validate-safari-import.sh
 └── docs/
 ```
 
@@ -102,7 +103,8 @@ pagecase/
 ├── processing/
 ├── results/
 ├── ChromeExtension/
-└── preferences.json
+├── preferences.json
+└── chrome-restored-groups.json
 ```
 
 测试通过 `PAGECASE_DATA_ROOT` 指向临时目录，不接触真实用户数据。
@@ -346,10 +348,11 @@ Bridge 连接后持续运行：
 - 分组覆盖结果保留实际命中的快照、窗口和标签组标识，使“查看快照”可以精确打开
   对应版本并滚动到组标题。
 - `SnapshotPresenceEvaluator` 只接受标识完全一致、`kind = chrome` 且 30 秒内仍新鲜的实时来源。快照汇总以完整网址和重复次数计算仍在 Chrome 任意位置的网页数量；标签组状态先核对保存时的原组，原组缺失后再核对明确记录的恢复组标识。
-- `ChromeRestoredGroupRepository` 把来源、快照、原组和最近恢复组的映射原子写入 `chrome-restored-groups.json`。它不进入资料库导出，也不跨 Chrome 来源匹配；Safari 完全不读取该索引。
+- `ChromeRestoredGroupRepository` 把来源、快照、原组和当前记录的恢复组映射原子写入 `chrome-restored-groups.json`。它不进入资料库导出，也不跨 Chrome 来源匹配；Safari 完全不读取该索引。
 - `ChromeLibraryOverviewBuilder` 在领域层按 Chrome 快照计算已离开、部分仍在、全部仍在与待确认数量；标签组快照使用原组／恢复组语境，Safari 合集在计数前即被排除。
 - 在场状态区分全部仍在、部分仍在、已经离开与无法确认。来源缺失或过期一律返回无法确认；Safari 合集和空 Chrome 快照不产生在场状态，另一 Chrome 来源也不能补足结果。
 - Chrome 实时页用同一分组覆盖结果在内存中计算“全部 / 需保存 / 已收纳”；筛选只构造当前视图需要的窗口与标签组数组，不写偏好、不改模型，也不发送浏览器命令。
+- `ChromeClosableGroupBuilder` 只遍历 30 秒内仍新鲜的 Chrome 实时来源；非空标签组必须被同来源快照完整覆盖才进入“可以手动关闭”清单。结果只携带展示和定位所需的来源、窗口、标签组与快照信息，不生成关闭命令；Safari 在领域层即被排除。
 - `GroupRestorePreviewBuilder` 只在用户点击 Chrome“恢复整组”时运行；它只选择标识匹配且 `kind = chrome` 的实时来源，以完整网址和重复次数计算当前已打开数量，不读取 Safari 合集，也不改变将发送的完整网址列表。
 - `GroupRestoreReceiptBuilder` 只处理 `restoreGroup`：完整创建且成组为成功，已创建任意标签或已成组但后续失败为部分完成，零副作用错误为失败，30 秒无结果为超时。回执不发起清理或重试；Safari 导航与 Safari 专属搜索只隐藏 Chrome 回执，不销毁其状态。
 - `AppNotice.browserKind` 为浏览器专属操作记录来源；`nil` 只用于资料读取、完整导入导出和设置等跨浏览器反馈。`RootView` 根据当前导航来源或 `SearchBrowserFilter` 决定是否显示提示，隐藏时不销毁状态，因此返回同一浏览器后仍可核对结果。
@@ -406,6 +409,7 @@ Bridge 连接后持续运行：
 13. Chrome 或 Safari 专属搜索与专属导出都必须在领域数据集合上过滤，输出中不能出现另一浏览器来源。
 14. 导入预览必须只读；浏览器选择必须在领域层过滤，取消、空选择和任一无效记录都不能产生部分写入。
 15. Chrome 恢复结果必须校验命令、来源与动作；部分完成或超时不得触发自动回滚、清理或重试，Safari 页面不得呈现 Chrome 回执。
+16. “可以手动关闭”清单只能由新鲜 Chrome 与同来源完整覆盖结果产生，只提供定位，不得生成关闭、移动、挂起或分组命令；Safari 不参与计算或展示。
 
 ## 12. 可演进边界
 

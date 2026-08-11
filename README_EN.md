@@ -38,6 +38,7 @@ Let pages leave memory, not your reach.
 - **Explicit browser separation** — Sidebar sections, libraries, counts, icons, and actions distinguish Chrome from Safari; mixed search results still identify their browser.
 - **Full-state or group snapshots** — Save the complete Chrome state or one tab group; neither is overwritten by later Chrome changes.
 - **Safe-to-close status** — Shows full-state and per-group coverage with an explicit All / Needs Saving / Collected switch.
+- **Manual-close checklist** — Lists only fresh Chrome groups that are fully covered by a same-source snapshot, with a final Locate action before you close them yourself.
 - **Fast page and group retrieval** — Searches titles, domains, full URLs, tab groups, and snapshot names with an explicit All / Chrome / Safari scope; groups remain first-class results.
 - **Restore on demand** — Focuses a page still open in Chrome, opens one page from a snapshot, or restores a complete tab group in order.
 - **Preserved context** — Keeps windows, group names, colors, order, and duplicate URLs instead of merging identical URLs from different contexts.
@@ -130,6 +131,15 @@ The Live page summarizes collected groups and provides three flat filters:
 Collected never means that Pagecase may close the group. After verifying the snapshot, you still return to Chrome and close inactive groups yourself. Opening a hidden group from search resets this filter to All before Pagecase reveals the target.
 
 ![Chrome tab group collection filters](artifacts/qa-group-readiness.png)
+
+### Verify a Chrome group before closing it
+
+When a Chrome source is still fresh and every page in a non-empty group is fully covered by a local snapshot from that same source, the Live page adds it to the “可以手动关闭” (Can Be Closed Manually) checklist. Each row keeps the window number, group name, page count, matching snapshot, save date, and a Locate action for one final review.
+
+This checklist is guidance, not browser control. Pagecase never closes, moves, discards, or regroups a tab for you. The checklist belongs only to Chrome Live; Safari pages never display it or inherit Chrome presence and closing semantics.
+
+![Chrome manual-close checklist](artifacts/qa-chrome-closable-groups.jpeg)
+![Chrome manual-close checklist in dark mode](artifacts/qa-chrome-closable-groups-dark.jpeg)
 
 ### Browse earlier group versions
 
@@ -238,6 +248,7 @@ Production data is stored by default in:
 ~/Library/Application Support/Pagecase/
 ├── live/
 ├── snapshots/
+├── chrome-restored-groups.json
 ├── preferences.json
 └── ChromeExtension/
 ```
@@ -276,7 +287,7 @@ npm run check:safari
 
 The repository includes a [GitHub Actions quality workflow](.github/workflows/quality.yml). Pushes to `main`, pull requests, and manual runs execute the same Swift, extension, Safari-boundary, Release, and Bridge checks on a standard `macos-15` runner. The workflow has read-only repository access, uploads no build artifacts, and never connects to a real Chrome or Safari session.
 
-Pagecase 0.7.0 has passed 109 Swift core behavior checks, 13 extension tests, the structured Bridge result round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run.
+The current Pagecase 0.7.0 source has passed 111 Swift core behavior checks, 13 extension tests, the structured Bridge result round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run. The Chrome manual-close checklist only provides verification and location; it never closes a tab.
 
 > [!NOTE]
 > A Command Line Tools-only environment cannot enumerate Swift Testing tests correctly. `swift test` still compiles the test package, while `PagecaseCoreChecks` executes the same critical behavior checks.
