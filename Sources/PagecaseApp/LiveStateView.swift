@@ -72,18 +72,27 @@ struct LiveStateView: View {
   @State private var showingSaveSheet = false
   @State private var groupSaveTarget: GroupSaveTarget?
   @State private var groupFilter = LiveGroupFilter.all
+  @State private var isClosableGroupsExpanded = true
 
   var body: some View {
     Group {
       if let state = model.selectedLiveState {
         let groupCoverages = groupCoverages(in: state)
         let groupReadiness = groupReadinessSummary(groupCoverages)
+        let closableGroups = ChromeClosableGroupBuilder.make(
+          liveStates: [state],
+          snapshots: model.snapshots
+        )
 
         ScrollViewReader { proxy in
           ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
               header(state)
               groupReadinessToolbar(groupReadiness)
+
+              if !closableGroups.isEmpty {
+                closableGroupsSection(closableGroups)
+              }
 
               let windows = filteredWindows(
                 in: state,
@@ -260,6 +269,135 @@ struct LiveStateView: View {
     return colorScheme == .dark
       ? Color(red: 0.88, green: 0.70, blue: 0.34)
       : Color(red: 0.63, green: 0.43, blue: 0.08)
+  }
+
+  private func closableGroupsSection(
+    _ candidates: [ChromeClosableGroupCandidate]
+  ) -> some View {
+    let pageCount = candidates.reduce(0) { $0 + $1.pageCount }
+
+    return VStack(alignment: .leading, spacing: 0) {
+      HStack(alignment: .top, spacing: 14) {
+        VStack(alignment: .leading, spacing: 5) {
+          Label {
+            Text("可以手动关闭")
+              .font(.system(size: 12, weight: .semibold))
+          } icon: {
+            Image(systemName: "checkmark.shield.fill")
+              .foregroundStyle(archivedColor)
+          }
+
+          Text("\(candidates.count) 个标签组 · \(pageCount) 个网页已完整保存")
+            .font(.system(size: 10, design: .monospaced))
+            .foregroundStyle(Palette.muted(colorScheme))
+        }
+
+        Spacer(minLength: 12)
+
+        Button {
+          isClosableGroupsExpanded.toggle()
+        } label: {
+          Label(
+            isClosableGroupsExpanded ? "收起清单" : "展开清单",
+            systemImage: isClosableGroupsExpanded ? "chevron.up" : "chevron.down"
+          )
+          .font(.system(size: 10, weight: .medium))
+          .foregroundStyle(Palette.muted(colorScheme))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+          isClosableGroupsExpanded ? "收起可以手动关闭的标签组" : "展开可以手动关闭的标签组"
+        )
+      }
+      .padding(.horizontal, 15)
+      .padding(.vertical, 13)
+
+      if isClosableGroupsExpanded {
+        Divider()
+
+        ForEach(candidates) { candidate in
+          closableGroupRow(candidate)
+
+          if candidate.id != candidates.last?.id {
+            Divider()
+              .padding(.leading, 15)
+          }
+        }
+
+        Divider()
+
+        Label {
+          Text("先确认快照无误，再回到 Chrome 手动关闭。页匣不会替你关闭标签。")
+            .font(.system(size: 10))
+            .foregroundStyle(Palette.muted(colorScheme))
+        } icon: {
+          Image(systemName: "hand.raised")
+            .foregroundStyle(Palette.muted(colorScheme))
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 11)
+      }
+    }
+    .background(Palette.surface(colorScheme))
+    .clipShape(RoundedRectangle(cornerRadius: 10))
+    .overlay {
+      RoundedRectangle(cornerRadius: 10)
+        .stroke(Palette.border(colorScheme), lineWidth: 1)
+    }
+    .accessibilityElement(children: .contain)
+  }
+
+  private func closableGroupRow(
+    _ candidate: ChromeClosableGroupCandidate
+  ) -> some View {
+    HStack(spacing: 12) {
+      Circle()
+        .fill(candidate.group.color.displayColor)
+        .frame(width: 8, height: 8)
+        .accessibilityHidden(true)
+
+      VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 7) {
+          Text(candidate.group.displayTitle)
+            .font(.system(size: 12, weight: .semibold))
+            .lineLimit(1)
+
+          Text("\(candidate.pageCount) 页")
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundStyle(Palette.muted(colorScheme))
+
+          Text("窗口 \(candidate.windowOrder + 1)")
+            .font(.system(size: 9, weight: .medium))
+            .foregroundStyle(Palette.muted(colorScheme))
+        }
+
+        Text("\(candidate.sourceLabel) · \(candidate.snapshotName) · \(candidate.snapshotCreatedAt.formatted(date: .abbreviated, time: .omitted))")
+          .font(.system(size: 9, design: .monospaced))
+          .foregroundStyle(Palette.muted(colorScheme))
+          .lineLimit(1)
+          .minimumScaleFactor(0.76)
+      }
+
+      Spacer(minLength: 10)
+
+      Button {
+        guard let page = candidate.group.tabs.first else {
+          return
+        }
+        model.focus(page: page, sourceId: candidate.sourceId)
+      } label: {
+        Label("定位", systemImage: "location.viewfinder")
+          .font(.system(size: 10, weight: .medium))
+      }
+      .buttonStyle(.bordered)
+      .controlSize(.small)
+      .disabled(!model.isSourceActionAvailable(candidate.sourceId))
+      .accessibilityLabel("定位到\(candidate.group.displayTitle)")
+      .accessibilityHint("只聚焦这个 Chrome 标签组的第一张网页")
+    }
+    .padding(.horizontal, 15)
+    .padding(.vertical, 11)
+    .accessibilityElement(children: .contain)
   }
 
   private func groupReadinessToolbar(_ summary: LiveGroupReadinessSummary) -> some View {

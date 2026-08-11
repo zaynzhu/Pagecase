@@ -36,6 +36,90 @@ func demoDataKeepsWindowsGroupsAndDuplicateURLs() throws {
 }
 
 @Test
+func chromeClosableGroupBuilderRequiresFreshChromeAndCompleteSnapshot() {
+  let group = TabGroup(
+    id: 21,
+    title: "可以关闭",
+    color: .blue,
+    collapsed: false,
+    order: 0,
+    tabs: [
+      PageItem(
+        id: 22,
+        windowId: 20,
+        groupId: 21,
+        index: 0,
+        title: "本地项目",
+        url: "https://example.com/closable"
+      )
+    ]
+  )
+  let window = BrowserWindow(
+    id: 20,
+    order: 0,
+    focused: true,
+    groups: [group],
+    ungroupedTabs: []
+  )
+  let source = BrowserSource(
+    id: "closable-source",
+    label: "Chrome · 工作",
+    capturedAt: referenceDate
+  )
+  let snapshot = SavedSnapshot(
+    id: "closable-snapshot",
+    name: "工作 · 已保存",
+    createdAt: referenceDate.addingTimeInterval(-60),
+    sourceId: source.id,
+    sourceLabel: source.label,
+    scope: .group,
+    windows: [window]
+  )
+  let candidate = ChromeClosableGroupBuilder.make(
+    liveStates: [LiveState(source: source, windows: [window])],
+    snapshots: [snapshot],
+    at: referenceDate
+  )
+
+  #expect(candidate.count == 1)
+  #expect(candidate.first?.group.displayTitle == "可以关闭")
+  #expect(candidate.first?.snapshotId == snapshot.id)
+
+  let safariState = LiveState(
+    source: BrowserSource(
+      id: source.id,
+      kind: .safari,
+      label: "Safari",
+      capturedAt: referenceDate
+    ),
+    windows: [window]
+  )
+  #expect(
+    ChromeClosableGroupBuilder.make(
+      liveStates: [safariState],
+      snapshots: [snapshot],
+      at: referenceDate
+    ).isEmpty
+  )
+
+  let staleState = LiveState(
+    source: BrowserSource(
+      id: source.id,
+      label: source.label,
+      capturedAt: referenceDate.addingTimeInterval(-31)
+    ),
+    windows: [window]
+  )
+  #expect(
+    ChromeClosableGroupBuilder.make(
+      liveStates: [staleState],
+      snapshots: [snapshot],
+      at: referenceDate
+    ).isEmpty
+  )
+}
+
+@Test
 func groupRestorePreviewCountsAlreadyOpenURLsWithMultiplicity() {
   let duplicateURL = "https://example.com/duplicate"
   let group = TabGroup(

@@ -132,6 +132,15 @@ open "dist/页匣.app"
 
 ![Chrome 标签组收纳筛选](artifacts/qa-group-readiness.png)
 
+### 确认后再关闭 Chrome 标签组
+
+当 Chrome 来源仍然新鲜、某个标签组的网页又已经全部写入同一来源的本地快照时，“现在”页面会在筛选条下方显示“可以手动关闭”清单。清单会保留窗口编号、标签组名称、网页数量、对应快照和最近保存日期，并提供“定位”入口，方便你在关闭前做最后一次核对。
+
+这是一份安全提示，不是浏览器操作权限：页匣不会替你关闭、移动、挂起或重新分组任何标签。确认无误后，回到 Chrome 手动关闭对应标签组，完成释放内存的动作。清单只属于 Chrome 当前页；Safari 页面不会出现这段文案、Chrome 在场状态或关闭语义。
+
+![Chrome 可以手动关闭清单](artifacts/qa-chrome-closable-groups.jpeg)
+![Chrome 可以手动关闭清单深色模式](artifacts/qa-chrome-closable-groups-dark.jpeg)
+
 ### 浏览标签组的历史版本
 
 同一个 Chrome 标签组反复保存后，快照侧栏会把这些独立快照收纳到一个版本序列：
@@ -287,7 +296,7 @@ npm run check:safari
 
 仓库内置 [GitHub Actions 项目检查](.github/workflows/quality.yml)：推送到 `main`、提交 Pull Request 或手动触发时，使用标准 `macos-15` runner 执行同一组 Swift、扩展、Safari 边界、Release 与 Bridge 检查。工作流只有代码读取权限，不上传构建产物，也不会连接真实 Chrome 或 Safari。
 
-当前 0.7.0 版本已通过 109 项 Swift 核心行为检查、13 项扩展测试、Bridge 结构化结果往返、Chrome 扩展与 Safari 捕获静态安全检查、Release 构建、浅深色视觉验收和 500 页性能验收。
+当前 0.7.0 版本已通过 111 项 Swift 核心行为检查、13 项扩展测试、Bridge 结构化结果往返、Chrome 扩展与 Safari 捕获静态安全检查、Release 构建、浅深色视觉验收和 500 页性能验收；Chrome“可以手动关闭”清单只提供核对与定位，不会替用户关闭标签。
 
 > [!NOTE]
 > 仅安装 Command Line Tools 的环境无法正常枚举 Swift Testing 测试；`swift test` 仍负责编译测试包，`PagecaseCoreChecks` 会实际执行同一组关键行为检查。

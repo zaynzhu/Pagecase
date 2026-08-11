@@ -336,6 +336,11 @@ func runChecks() throws -> Int {
     liveStates: states,
     at: referenceDate
   )
+  let closableGroups = ChromeClosableGroupBuilder.make(
+    liveStates: states,
+    snapshots: snapshots,
+    at: referenceDate
+  )
   let libraryItems = SnapshotLibraryOrganizer.organize(snapshots)
   let developmentSeries = SnapshotLibraryOrganizer.groupSeries(
     containing: "demo-snapshot-development-group-early",
@@ -345,6 +350,31 @@ func runChecks() throws -> Int {
   passed += try check(
     chromeOverview.totalCount == 4,
     "Chrome 收纳总览混入了 Safari 合集"
+  )
+  passed += try check(
+    closableGroups.count == 6
+      && closableGroups.allSatisfy { $0.sourceId == "demo-chrome-main" },
+    "可手动关闭清单没有只收录新鲜 Chrome 中已完整保存的标签组"
+  )
+  passed += try check(
+    ChromeClosableGroupBuilder.make(
+      liveStates: snapshots
+        .filter { $0.sourceKind == .safari }
+        .map {
+          LiveState(
+            source: BrowserSource(
+              id: $0.sourceId,
+              kind: .safari,
+              label: $0.sourceLabel,
+              capturedAt: referenceDate
+            ),
+            windows: $0.windows
+          )
+        },
+      snapshots: snapshots,
+      at: referenceDate
+    ).isEmpty,
+    "Safari 合集被错误加入 Chrome 可手动关闭清单"
   )
   passed += try check(libraryItems.count == 4, "标签组版本没有收纳为一个资料库条目")
   passed += try check(developmentSeries?.title == "开发", "标签组版本序列标题错误")
