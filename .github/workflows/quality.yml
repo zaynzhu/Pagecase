@@ -29,6 +29,9 @@ jobs:
         with:
           node-version: "22"
 
+      - name: 准备静态检查工具
+        run: brew install ripgrep
+
       - name: 记录工具链
         run: |
           swift --version
