@@ -61,7 +61,11 @@ struct SnapshotLibraryView: View {
     }
     .sheet(item: $restoreTarget) { target in
       GroupRestorePreviewSheet(target: target) {
-        model.restore(group: target.group, sourceId: target.sourceId)
+        model.restore(
+          group: target.group,
+          sourceId: target.sourceId,
+          snapshotId: target.snapshotId
+        )
       }
     }
     .confirmationDialog(
@@ -91,6 +95,8 @@ struct SnapshotLibraryView: View {
       HStack(alignment: .firstTextBaseline) {
         Text(model.libraryTitle)
           .font(.system(size: 24, weight: .semibold, design: .serif))
+          .lineLimit(1)
+          .minimumScaleFactor(0.82)
 
         Spacer()
 
@@ -100,7 +106,13 @@ struct SnapshotLibraryView: View {
       }
         .padding(.horizontal, 18)
         .padding(.top, 24)
-        .padding(.bottom, 16)
+        .padding(.bottom, model.libraryBrowserKind == .chrome ? 12 : 16)
+
+      if model.libraryBrowserKind == .chrome {
+        chromeOverview
+          .padding(.horizontal, 18)
+          .padding(.bottom, 14)
+      }
 
       Divider()
 
@@ -137,6 +149,13 @@ struct SnapshotLibraryView: View {
           .lineLimit(2)
           .frame(maxWidth: .infinity, alignment: .leading)
 
+        if let presence = model.chromeIndexPresence(for: snapshot) {
+          ChromePresenceLabel(
+            presence: presence,
+            context: snapshot.scope == .group ? .group : .snapshot
+          )
+        }
+
         HStack {
           Text(snapshotScopeTitle(snapshot))
           Text(snapshot.createdAt.formatted(date: .abbreviated, time: .omitted))
@@ -145,6 +164,8 @@ struct SnapshotLibraryView: View {
         }
         .font(.system(size: 9, design: .monospaced))
         .foregroundStyle(Palette.muted(colorScheme))
+        .lineLimit(1)
+        .minimumScaleFactor(0.78)
       }
       .padding(10)
       .contentShape(Rectangle())
@@ -182,6 +203,13 @@ struct SnapshotLibraryView: View {
                 .foregroundStyle(Palette.muted(colorScheme))
                 .lineLimit(1)
 
+              if let presence = model.chromeIndexPresence(for: series.latestSnapshot) {
+                ChromePresenceLabel(
+                  presence: presence,
+                  context: .group
+                )
+              }
+
               HStack {
                 Text(series.snapshots.count == 1 ? "标签组快照" : "\(series.snapshots.count) 个版本")
                 Text(series.latestSnapshot.createdAt.formatted(date: .abbreviated, time: .omitted))
@@ -190,6 +218,8 @@ struct SnapshotLibraryView: View {
               }
               .font(.system(size: 9, design: .monospaced))
               .foregroundStyle(Palette.muted(colorScheme))
+              .lineLimit(1)
+              .minimumScaleFactor(0.72)
             }
           }
           .padding(10)
@@ -202,7 +232,12 @@ struct SnapshotLibraryView: View {
             ? Palette.selection(colorScheme)
             : .clear
         )
-        .accessibilityLabel("\(series.title)，最新版本，\(series.latestSnapshot.tabCount) 个网页")
+        .accessibilityLabel(
+          indexAccessibilityLabel(
+            for: series.latestSnapshot,
+            prefix: "\(series.title)，最新版本"
+          )
+        )
 
         if series.snapshots.count > 1 {
           Divider()
@@ -250,6 +285,13 @@ struct SnapshotLibraryView: View {
           .font(.system(size: 11, weight: .medium, design: .serif))
           .lineLimit(1)
 
+        if let presence = model.chromeIndexPresence(for: snapshot) {
+          ChromePresenceLabel(
+            presence: presence,
+            context: .group
+          )
+        }
+
         HStack {
           Text(snapshot.createdAt.formatted(date: .abbreviated, time: .omitted))
           Spacer()
@@ -257,6 +299,8 @@ struct SnapshotLibraryView: View {
         }
         .font(.system(size: 9, design: .monospaced))
         .foregroundStyle(Palette.muted(colorScheme))
+        .lineLimit(1)
+        .minimumScaleFactor(0.78)
       }
       .padding(.horizontal, 10)
       .padding(.vertical, 8)
@@ -270,13 +314,30 @@ struct SnapshotLibraryView: View {
         : .clear
     )
     .clipShape(RoundedRectangle(cornerRadius: 6))
-    .accessibilityLabel("\(snapshot.name)，较早版本，\(snapshot.tabCount) 个网页")
+    .accessibilityLabel(
+      indexAccessibilityLabel(
+        for: snapshot,
+        prefix: "\(snapshot.name)，较早版本"
+      )
+    )
   }
 
   private func toggleSeriesExpansion(_ seriesId: String) {
     if !expandedSeriesIds.insert(seriesId).inserted {
       expandedSeriesIds.remove(seriesId)
     }
+  }
+
+  private func indexAccessibilityLabel(
+    for snapshot: SavedSnapshot,
+    prefix: String
+  ) -> String {
+    var parts = [prefix, "\(snapshot.tabCount) 个网页"]
+    if let presence = model.chromeIndexPresence(for: snapshot) {
+      let context: ChromePresenceLabel.Context = snapshot.scope == .group ? .group : .snapshot
+      parts.append(ChromePresenceLabel.title(for: presence, context: context))
+    }
+    return parts.joined(separator: "，")
   }
 
   private func expandSelectedSeriesIfNeeded() {
@@ -345,7 +406,8 @@ struct SnapshotLibraryView: View {
                   }
                   return model.chromePresence(
                     for: group,
-                    sourceId: snapshot.sourceId
+                    sourceId: snapshot.sourceId,
+                    snapshotId: snapshot.id
                   )
                 },
                 groupActionTitle: { _ in
@@ -393,6 +455,46 @@ struct SnapshotLibraryView: View {
         message: ""
       )
     }
+  }
+
+  private var chromeOverview: some View {
+    let overview = model.chromeLibraryOverview
+    return VStack(alignment: .leading, spacing: 8) {
+      Text("收纳总览")
+        .font(.system(size: 9, weight: .semibold))
+        .foregroundStyle(Palette.muted(colorScheme))
+
+      HStack(spacing: 0) {
+        overviewMetric(value: overview.noneOpenCount, label: "已离开")
+        overviewDivider
+        overviewMetric(value: overview.partiallyOpenCount, label: "部分")
+        overviewDivider
+        overviewMetric(value: overview.allOpenCount, label: "仍在")
+        overviewDivider
+        overviewMetric(value: overview.unavailableCount, label: "待确认")
+      }
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(
+        "Chrome 收纳总览，已离开 \(overview.noneOpenCount) 份，部分仍在 \(overview.partiallyOpenCount) 份，全部仍在 \(overview.allOpenCount) 份，待确认 \(overview.unavailableCount) 份"
+      )
+    }
+  }
+
+  private func overviewMetric(value: Int, label: String) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text("\(value)")
+        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+      Text(label)
+        .font(.system(size: 8, weight: .medium))
+        .foregroundStyle(Palette.muted(colorScheme))
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private var overviewDivider: some View {
+    Divider()
+      .frame(height: 25)
+      .padding(.horizontal, 5)
   }
 
   private func snapshotSummary(

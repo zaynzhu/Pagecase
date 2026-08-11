@@ -76,9 +76,15 @@ struct AppNotice: Identifiable, Equatable {
   }
 }
 
+struct PendingGroupRestore {
+  let snapshotId: String
+  let originalGroupId: Int
+}
+
 struct PendingBrowserCommand {
   let command: BrowserCommand
   let deadline: Date
+  let groupRestore: PendingGroupRestore?
 }
 
 enum SourceAvailability: Equatable {
@@ -120,7 +126,7 @@ struct PendingLibraryImport: Identifiable, Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
-  static let applicationVersion = "0.6.0"
+  static let applicationVersion = "0.7.0"
 
   @Published var selection: NavigationItem = .chromeLive
   @Published var liveStates: [LiveState] = []
@@ -137,6 +143,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var collapsedGroupKeys: Set<String> = []
   @Published private(set) var groupFocusRequest: GroupFocusRequest?
   @Published private(set) var safariCapture: SafariCapture?
+  @Published private(set) var chromeRestoredGroupIndex = ChromeRestoredGroupIndex()
   @Published var pendingLibraryImport: PendingLibraryImport?
   @Published var notice: AppNotice?
   @Published var chromeRestoreReceipt: GroupRestoreReceipt?
@@ -152,6 +159,7 @@ final class AppModel: ObservableObject {
   private let nativeHostManager: NativeHostManager
   private let extensionPackageManager: ExtensionPackageManager
   private let displayPreferencesRepository: DisplayPreferencesRepository
+  private let chromeRestoredGroupRepository: ChromeRestoredGroupRepository
   private let safariCapturer: any SafariCapturing
   private var pendingCommands: [String: PendingBrowserCommand] = [:]
   private var contentSignature: String?
@@ -234,6 +242,7 @@ final class AppModel: ObservableObject {
       destinationDirectory: preparedExtensionDirectory
     )
     displayPreferencesRepository = DisplayPreferencesRepository(paths: paths)
+    chromeRestoredGroupRepository = ChromeRestoredGroupRepository(paths: paths)
     self.extensionId = initialNativeHostStatus.extensionId ?? ""
 
     let repositories: (SnapshotRepository?, CommandRepository?, Error?)
@@ -256,6 +265,12 @@ final class AppModel: ObservableObject {
       collapsedGroupKeys = try displayPreferencesRepository.load().collapsedGroupKeys
     } catch {
       notice = AppNotice(kind: .error, message: "读取折叠状态失败：\(error.localizedDescription)")
+    }
+
+    do {
+      chromeRestoredGroupIndex = try chromeRestoredGroupRepository.load()
+    } catch {
+      notice = AppNotice(kind: .error, message: "读取 Chrome 恢复组状态失败：\(error.localizedDescription)")
     }
 
     if isDemoMode {
@@ -291,6 +306,14 @@ final class AppModel: ObservableObject {
 
   var chromeSnapshots: [SavedSnapshot] {
     snapshots.filter { $0.sourceKind == .chrome }
+  }
+
+  var chromeLibraryOverview: ChromeLibraryOverview {
+    ChromeLibraryOverviewBuilder.make(
+      snapshots: chromeSnapshots,
+      liveStates: liveStates,
+      restoredGroups: chromeRestoredGroupIndex
+    )
   }
 
   var safariCollections: [SavedSnapshot] {
@@ -433,13 +456,35 @@ final class AppModel: ObservableObject {
 
   func chromePresence(
     for group: TabGroup,
-    sourceId: String
+    sourceId: String,
+    snapshotId: String
   ) -> ChromeSnapshotPresence {
-    SnapshotPresenceEvaluator.evaluate(
+    let restoredGroupId = chromeRestoredGroupIndex.record(
+      sourceId: sourceId,
+      snapshotId: snapshotId,
+      originalGroupId: group.id
+    )?.restoredGroupId
+    return SnapshotPresenceEvaluator.evaluate(
       group: group,
       sourceId: sourceId,
+      restoredGroupId: restoredGroupId,
       liveStates: liveStates
     )
+  }
+
+  func chromeIndexPresence(for snapshot: SavedSnapshot) -> ChromeSnapshotPresence? {
+    guard snapshot.sourceKind == .chrome else {
+      return nil
+    }
+    if snapshot.scope == .group,
+       let group = snapshot.windows.flatMap(\.groups).first {
+      return chromePresence(
+        for: group,
+        sourceId: snapshot.sourceId,
+        snapshotId: snapshot.id
+      )
+    }
+    return chromePresence(for: snapshot)
   }
 
   func chromeSourceLabel(for sourceId: String) -> String {
@@ -998,7 +1043,7 @@ final class AppModel: ObservableObject {
     openInSafari(urls: urls)
   }
 
-  func restore(group: TabGroup, sourceId: String) {
+  func restore(group: TabGroup, sourceId: String, snapshotId: String) {
     enqueue(
       BrowserCommand(
         sourceId: sourceId,
@@ -1006,6 +1051,10 @@ final class AppModel: ObservableObject {
         groupTitle: group.title,
         groupColor: group.color,
         urls: group.tabs.map(\.url)
+      ),
+      groupRestore: PendingGroupRestore(
+        snapshotId: snapshotId,
+        originalGroupId: group.id
       ),
       demoMessage: "演示模式不会在 Chrome 中恢复标签组"
     )
@@ -1243,7 +1292,11 @@ final class AppModel: ObservableObject {
     chromeRestoreReceipt = nil
   }
 
-  private func enqueue(_ command: BrowserCommand, demoMessage: String) {
+  private func enqueue(
+    _ command: BrowserCommand,
+    groupRestore: PendingGroupRestore? = nil,
+    demoMessage: String
+  ) {
     if command.action == .restoreGroup {
       chromeRestoreReceipt = nil
     }
@@ -1279,7 +1332,8 @@ final class AppModel: ObservableObject {
       try commandRepository.enqueue(command)
       pendingCommands[command.id] = PendingBrowserCommand(
         command: command,
-        deadline: Date().addingTimeInterval(command.action == .restoreGroup ? 30 : 3)
+        deadline: Date().addingTimeInterval(command.action == .restoreGroup ? 30 : 3),
+        groupRestore: groupRestore
       )
       notice = AppNotice(
         kind: .success,
@@ -1320,7 +1374,16 @@ final class AppModel: ObservableObject {
               continue
             }
             chromeRestoreReceipt = receipt
-            notice = nil
+            do {
+              try recordRestoredGroup(from: pending, result: result)
+              notice = nil
+            } catch {
+              notice = AppNotice(
+                kind: .warning,
+                message: "标签组已恢复，但新组状态没有保存：\(error.localizedDescription)",
+                browserKind: .chrome
+              )
+            }
           } else {
             notice = AppNotice(
               kind: result.success ? .success : .error,
@@ -1355,6 +1418,26 @@ final class AppModel: ObservableObject {
         )
       }
     }
+  }
+
+  private func recordRestoredGroup(
+    from pending: PendingBrowserCommand,
+    result: BrowserCommandResult
+  ) throws {
+    guard let groupRestore = pending.groupRestore,
+          result.groupCreated == true,
+          let restoredGroupId = result.restoredGroupId else {
+      return
+    }
+    chromeRestoredGroupIndex = try chromeRestoredGroupRepository.save(
+      ChromeRestoredGroupRecord(
+        sourceId: pending.command.sourceId,
+        snapshotId: groupRestore.snapshotId,
+        originalGroupId: groupRestore.originalGroupId,
+        restoredGroupId: restoredGroupId,
+        restoredAt: result.completedAt
+      )
+    )
   }
 
   private func showDemoRestoreReceipt(for command: BrowserCommand) {

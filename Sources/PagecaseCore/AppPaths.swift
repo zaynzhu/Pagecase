@@ -27,6 +27,7 @@ public struct AppPaths: Sendable {
   public var processing: URL { root.appendingPathComponent("processing", isDirectory: true) }
   public var results: URL { root.appendingPathComponent("results", isDirectory: true) }
   public var preferences: URL { root.appendingPathComponent("preferences.json") }
+  public var chromeRestoredGroups: URL { root.appendingPathComponent("chrome-restored-groups.json") }
 
   public func createDirectories(fileManager: FileManager = .default) throws {
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)

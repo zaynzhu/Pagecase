@@ -63,7 +63,8 @@ async function handleNativeMessage(command) {
       ? {
           failureStage: error.failureStage,
           createdTabCount: error.createdTabCount,
-          groupCreated: error.groupCreated
+          groupCreated: error.groupCreated,
+          restoredGroupId: error.restoredGroupId
         }
       : {}
     nativePort?.postMessage({

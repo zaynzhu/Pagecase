@@ -60,6 +60,7 @@ final class BridgeRuntime: @unchecked Sendable {
           action: message.action,
           createdTabCount: message.createdTabCount,
           groupCreated: message.groupCreated,
+          restoredGroupId: message.restoredGroupId,
           failureStage: message.failureStage
         )
       )

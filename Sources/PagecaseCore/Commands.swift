@@ -109,6 +109,7 @@ public struct BrowserCommandResult: Codable, Equatable, Identifiable, Sendable {
   public let action: BrowserCommandAction?
   public let createdTabCount: Int?
   public let groupCreated: Bool?
+  public let restoredGroupId: Int?
   public let failureStage: BrowserCommandFailureStage?
   public let completedAt: Date
 
@@ -121,6 +122,7 @@ public struct BrowserCommandResult: Codable, Equatable, Identifiable, Sendable {
     action: BrowserCommandAction? = nil,
     createdTabCount: Int? = nil,
     groupCreated: Bool? = nil,
+    restoredGroupId: Int? = nil,
     failureStage: BrowserCommandFailureStage? = nil,
     completedAt: Date = Date()
   ) {
@@ -132,6 +134,7 @@ public struct BrowserCommandResult: Codable, Equatable, Identifiable, Sendable {
     self.action = action
     self.createdTabCount = createdTabCount
     self.groupCreated = groupCreated
+    self.restoredGroupId = restoredGroupId
     self.failureStage = failureStage
     self.completedAt = completedAt
   }

@@ -209,7 +209,9 @@ func runChecks() throws -> Int {
     at: referenceDate
   )
   passed += try check(
-    allOpenPresence.state == .allOpen && allOpenPresence.openPageCount == 3,
+    allOpenPresence.state == .allOpen
+      && allOpenPresence.openPageCount == 3
+      && allOpenPresence.groupLocation == .original,
     "完整存在的 Chrome 快照网页没有被识别"
   )
   let movedGroupId = restoreGroup.id + 1_000
@@ -255,6 +257,40 @@ func runChecks() throws -> Int {
     originalGroupMissingPresence.state == .noneOpen,
     "其他标签组中的相同网页被误报为原标签组仍存在"
   )
+  let restoredGroupPresence = SnapshotPresenceEvaluator.evaluate(
+    group: restoreGroup,
+    sourceId: restoreState.source.id,
+    restoredGroupId: movedGroupId,
+    liveStates: [
+      LiveState(
+        source: restoreState.source,
+        windows: [
+          BrowserWindow(
+            id: 10,
+            order: 0,
+            focused: true,
+            groups: [
+              TabGroup(
+                id: movedGroupId,
+                title: restoreGroup.title,
+                color: restoreGroup.color,
+                collapsed: false,
+                order: 0,
+                tabs: movedGroupTabs
+              )
+            ],
+            ungroupedTabs: []
+          )
+        ]
+      )
+    ],
+    at: referenceDate
+  )
+  passed += try check(
+    restoredGroupPresence.state == .allOpen
+      && restoredGroupPresence.groupLocation == .restored,
+    "恢复创建的新标签组没有被持续识别"
+  )
   let noneOpenPresence = SnapshotPresenceEvaluator.evaluate(
     pages: restoreGroup.tabs,
     sourceId: restoreState.source.id,
@@ -295,12 +331,21 @@ func runChecks() throws -> Int {
   )
 
   let snapshots = DemoData.snapshots(referenceDate: referenceDate)
+  let chromeOverview = ChromeLibraryOverviewBuilder.make(
+    snapshots: snapshots,
+    liveStates: states,
+    at: referenceDate
+  )
   let libraryItems = SnapshotLibraryOrganizer.organize(snapshots)
   let developmentSeries = SnapshotLibraryOrganizer.groupSeries(
     containing: "demo-snapshot-development-group-early",
     in: snapshots
   )
   passed += try check(snapshots.count == 5, "跨浏览器演示快照数量不正确")
+  passed += try check(
+    chromeOverview.totalCount == 4,
+    "Chrome 收纳总览混入了 Safari 合集"
+  )
   passed += try check(libraryItems.count == 4, "标签组版本没有收纳为一个资料库条目")
   passed += try check(developmentSeries?.title == "开发", "标签组版本序列标题错误")
   passed += try check(
@@ -1010,6 +1055,33 @@ func runChecks() throws -> Int {
       "标签组折叠状态未持久保存"
     )
 
+    let restoredGroupsRepository = ChromeRestoredGroupRepository(paths: paths)
+    let restoredGroupRecord = ChromeRestoredGroupRecord(
+      sourceId: firstState.source.id,
+      snapshotId: "saved-group",
+      originalGroupId: firstGroup.id,
+      restoredGroupId: firstGroup.id + 10_000,
+      restoredAt: referenceDate
+    )
+    try restoredGroupsRepository.save(restoredGroupRecord)
+    let replacementRecord = ChromeRestoredGroupRecord(
+      sourceId: restoredGroupRecord.sourceId,
+      snapshotId: restoredGroupRecord.snapshotId,
+      originalGroupId: restoredGroupRecord.originalGroupId,
+      restoredGroupId: restoredGroupRecord.restoredGroupId + 1,
+      restoredAt: referenceDate.addingTimeInterval(1)
+    )
+    let restoredGroupIndex = try restoredGroupsRepository.save(replacementRecord)
+    localPassed += try check(
+      restoredGroupIndex.records.count == 1
+        && restoredGroupIndex.record(
+          sourceId: replacementRecord.sourceId,
+          snapshotId: replacementRecord.snapshotId,
+          originalGroupId: replacementRecord.originalGroupId
+        )?.restoredGroupId == replacementRecord.restoredGroupId,
+      "Chrome 恢复组状态没有按快照原子更新"
+    )
+
     return localPassed
   }
 
@@ -1050,7 +1122,8 @@ func runChecks() throws -> Int {
     message: "已恢复",
     action: .restoreGroup,
     createdTabCount: 2,
-    groupCreated: true
+    groupCreated: true,
+    restoredGroupId: 88
   )
   let successReceipt = GroupRestoreReceiptBuilder.make(
     command: restoreCommand,
@@ -1060,7 +1133,8 @@ func runChecks() throws -> Int {
   passed += try check(
     successReceipt?.status == .success
       && successReceipt?.createdTabCount == 2
-      && successReceipt?.groupCreated == true,
+      && successReceipt?.groupCreated == true
+      && successResult.restoredGroupId == 88,
     "完整恢复结果没有生成成功回执"
   )
   let partialResult = BrowserCommandResult(
@@ -1071,6 +1145,7 @@ func runChecks() throws -> Int {
     action: .restoreGroup,
     createdTabCount: 2,
     groupCreated: false,
+    restoredGroupId: 88,
     failureStage: .groupingTabs
   )
   let partialReceipt = GroupRestoreReceiptBuilder.make(
@@ -1120,6 +1195,7 @@ func runChecks() throws -> Int {
     action: .restoreGroup,
     createdTabCount: 2,
     groupCreated: false,
+    restoredGroupId: 88,
     failureStage: .groupingTabs
   )
   let inboundFramed = try NativeMessageFramer.encode(inboundResult)
@@ -1131,6 +1207,7 @@ func runChecks() throws -> Int {
     decodedInbound.action == .restoreGroup
       && decodedInbound.createdTabCount == 2
       && decodedInbound.groupCreated == false
+      && decodedInbound.restoredGroupId == 88
       && decodedInbound.failureStage == .groupingTabs,
     "结构化恢复结果往返失败"
   )

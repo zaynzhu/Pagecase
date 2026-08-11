@@ -18,7 +18,7 @@ Let pages leave memory, not your reach.
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.6.0-2F3437?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.7.0-2F3437?style=flat-square)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-787774?style=flat-square&logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-6-D97757?style=flat-square&logo=swift&logoColor=white)
 
@@ -141,6 +141,14 @@ After the same Chrome tab group is saved repeatedly, the snapshot sidebar collec
 - Renaming or deleting affects only the selected snapshot and never merges, overwrites, or automatically cleans up another version.
 
 ![Tab group version series](artifacts/qa-snapshot-series.png)
+
+### Confirm what has left Chrome
+
+The Chrome snapshot index includes a compact collection overview for snapshots that have left Chrome, remain partially open, remain fully open, or cannot currently be confirmed. A group restored by Pagecase keeps the exact identifier returned for the newly created Chrome group, so later views can say “已恢复为新组” instead of confusing it with the original group.
+
+This status belongs only to Chrome snapshots. Safari collections have no background live source and never display or contribute to the Chrome overview.
+
+![Chrome collection overview and restored-group state](artifacts/qa-chrome-overview-restored-group.jpg)
 
 ### Collect the current Safari window
 
@@ -268,7 +276,7 @@ npm run check:safari
 
 The repository includes a [GitHub Actions quality workflow](.github/workflows/quality.yml). Pushes to `main`, pull requests, and manual runs execute the same Swift, extension, Safari-boundary, Release, and Bridge checks on a standard `macos-15` runner. The workflow has read-only repository access, uploads no build artifacts, and never connects to a real Chrome or Safari session.
 
-Pagecase 0.6.0 has passed 98 Swift core behavior checks, 13 extension tests, the structured Bridge result round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run.
+Pagecase 0.7.0 has passed 109 Swift core behavior checks, 13 extension tests, the structured Bridge result round trip, static safety checks for both the Chrome extension and Safari capture, Release builds, light/dark visual acceptance, and the 500-page performance run.
 
 > [!NOTE]
 > A Command Line Tools-only environment cannot enumerate Swift Testing tests correctly. `swift test` still compiles the test package, while `PagecaseCoreChecks` executes the same critical behavior checks.

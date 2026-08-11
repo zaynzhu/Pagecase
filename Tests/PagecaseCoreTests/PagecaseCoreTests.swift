@@ -267,6 +267,7 @@ func chromeSnapshotPresenceCountsDuplicateURLsAndAllStates() throws {
   )
   #expect(allOpen.state == .allOpen)
   #expect(allOpen.openPageCount == 3)
+  #expect(allOpen.groupLocation == .original)
 
   let movedGroupId = group.id + 1_000
   let movedGroupTabs = group.tabs.enumerated().map { index, page in
@@ -309,6 +310,39 @@ func chromeSnapshotPresenceCountsDuplicateURLsAndAllStates() throws {
   )
   #expect(originalGroupMissing.state == .noneOpen)
   #expect(originalGroupMissing.openPageCount == 0)
+  #expect(originalGroupMissing.groupLocation == .original)
+
+  let restoredGroupOpen = SnapshotPresenceEvaluator.evaluate(
+    group: group,
+    sourceId: snapshot.sourceId,
+    restoredGroupId: movedGroupId,
+    liveStates: [
+      LiveState(
+        source: partialState.source,
+        windows: [
+          BrowserWindow(
+            id: 80,
+            order: 0,
+            focused: true,
+            groups: [
+              TabGroup(
+                id: movedGroupId,
+                title: group.title,
+                color: group.color,
+                collapsed: false,
+                order: 0,
+                tabs: movedGroupTabs
+              )
+            ],
+            ungroupedTabs: []
+          )
+        ]
+      )
+    ],
+    at: referenceDate
+  )
+  #expect(restoredGroupOpen.state == .allOpen)
+  #expect(restoredGroupOpen.groupLocation == .restored)
 
   let noneOpen = SnapshotPresenceEvaluator.evaluate(
     pages: group.tabs,
@@ -318,6 +352,32 @@ func chromeSnapshotPresenceCountsDuplicateURLsAndAllStates() throws {
   )
   #expect(noneOpen.state == .noneOpen)
   #expect(noneOpen.openPageCount == 0)
+}
+
+@Test
+func chromeLibraryOverviewCountsChromeOnly() throws {
+  let snapshots = DemoData.snapshots(referenceDate: referenceDate)
+  let chromeSnapshots = snapshots.filter { $0.sourceKind == .chrome }
+  let firstSnapshot = try #require(chromeSnapshots.first)
+  let matchingState = LiveState(
+    source: BrowserSource(
+      id: firstSnapshot.sourceId,
+      label: firstSnapshot.sourceLabel,
+      capturedAt: referenceDate
+    ),
+    windows: firstSnapshot.windows
+  )
+
+  let overview = ChromeLibraryOverviewBuilder.make(
+    snapshots: snapshots,
+    liveStates: [matchingState],
+    at: referenceDate
+  )
+
+  #expect(overview.totalCount == chromeSnapshots.count)
+  #expect(overview.allOpenCount >= 1)
+  #expect(overview.unavailableCount >= 1)
+  #expect(overview.totalCount != snapshots.count)
 }
 
 @Test
@@ -1211,6 +1271,55 @@ func displayPreferencesPersistCollapsedGroups() throws {
 }
 
 @Test
+func chromeRestoredGroupRepositoryReplacesOnlyMatchingRecord() throws {
+  try withTemporaryPaths { paths in
+    let repository = ChromeRestoredGroupRepository(paths: paths)
+    let first = ChromeRestoredGroupRecord(
+      sourceId: "chrome-main",
+      snapshotId: "snapshot-one",
+      originalGroupId: 10,
+      restoredGroupId: 20,
+      restoredAt: referenceDate
+    )
+    let replacement = ChromeRestoredGroupRecord(
+      sourceId: first.sourceId,
+      snapshotId: first.snapshotId,
+      originalGroupId: first.originalGroupId,
+      restoredGroupId: 21,
+      restoredAt: referenceDate.addingTimeInterval(1)
+    )
+    let otherSource = ChromeRestoredGroupRecord(
+      sourceId: "chrome-other",
+      snapshotId: first.snapshotId,
+      originalGroupId: first.originalGroupId,
+      restoredGroupId: 30,
+      restoredAt: referenceDate
+    )
+
+    try repository.save(first)
+    try repository.save(otherSource)
+    let index = try repository.save(replacement)
+
+    #expect(index.records.count == 2)
+    #expect(
+      index.record(
+        sourceId: first.sourceId,
+        snapshotId: first.snapshotId,
+        originalGroupId: first.originalGroupId
+      )?.restoredGroupId == 21
+    )
+    #expect(
+      index.record(
+        sourceId: otherSource.sourceId,
+        snapshotId: otherSource.snapshotId,
+        originalGroupId: otherSource.originalGroupId
+      )?.restoredGroupId == 30
+    )
+    #expect(FileManager.default.fileExists(atPath: paths.chromeRestoredGroups.path))
+  }
+}
+
+@Test
 func exportImportRoundTripAndIdConflict() throws {
   try withTemporaryPaths { sourcePaths in
     let sourceRepository = try SnapshotRepository(paths: sourcePaths)
@@ -1661,6 +1770,7 @@ func groupRestoreReceiptDistinguishesPartialFailureAndTimeout() throws {
     action: .restoreGroup,
     createdTabCount: 2,
     groupCreated: false,
+    restoredGroupId: 88,
     failureStage: .groupingTabs
   )
   let receipt = try #require(
@@ -1768,6 +1878,7 @@ func nativeMessageRoundTripAndLengthValidation() throws {
     action: .restoreGroup,
     createdTabCount: 2,
     groupCreated: false,
+    restoredGroupId: 88,
     failureStage: .groupingTabs
   )
   let resultFramed = try NativeMessageFramer.encode(resultMessage)
@@ -1778,6 +1889,7 @@ func nativeMessageRoundTripAndLengthValidation() throws {
   #expect(resultDecoded.action == .restoreGroup)
   #expect(resultDecoded.createdTabCount == 2)
   #expect(resultDecoded.groupCreated == false)
+  #expect(resultDecoded.restoredGroupId == 88)
   #expect(resultDecoded.failureStage == .groupingTabs)
 
   var invalid = framed

@@ -87,7 +87,8 @@ test("restoreGroup 只分组本次新建的标签并保留顺序", async () => {
   assert.deepEqual(result, {
     message: "已恢复「开发」，共 2 个网页",
     createdTabCount: 2,
-    groupCreated: true
+    groupCreated: true,
+    restoredGroupId: 88
   })
   assert.deepEqual(calls, [
     [
@@ -217,6 +218,7 @@ test("restoreGroup 样式更新失败时说明标签已经成组", async () => {
       assert.equal(error.failureStage, "updatingGroup")
       assert.equal(error.createdTabCount, 1)
       assert.equal(error.groupCreated, true)
+      assert.equal(error.restoredGroupId, 88)
       return true
     }
   )

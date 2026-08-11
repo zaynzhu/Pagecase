@@ -1,4 +1,4 @@
-# 页匣 · Pagecase 0.6 技术设计
+# 页匣 · Pagecase 0.7 技术设计
 
 ## 1. 架构结论
 
@@ -276,6 +276,7 @@ Native Messaging 连接存活时每 20 秒发送一次只读现场心跳，使�
 - `action`：回显实际执行的命令类型，应用据此拒绝错配结果。
 - `createdTabCount`：已经由 Chrome 确认创建的标签数量。
 - `groupCreated`：本次新标签是否已经组成标签组。
+- `restoredGroupId`：Chrome 为本次新组返回的标识；只在已经成组后存在。
 - `failureStage`：`validation`、`creatingTabs`、`groupingTabs` 或 `updatingGroup`。
 
 新增字段均为可选，以继续读取旧版 Bridge 已落盘的结果；旧版成功结果仅在命令标识与来源一致后推断为完整成功，结果一旦携带 `action` 就必须与原命令匹配。
@@ -344,7 +345,9 @@ Bridge 连接后持续运行：
   快照，防止一份标签组快照被误报为整个 Chrome 现场已经保存。
 - 分组覆盖结果保留实际命中的快照、窗口和标签组标识，使“查看快照”可以精确打开
   对应版本并滚动到组标题。
-- `SnapshotPresenceEvaluator` 只接受标识完全一致、`kind = chrome` 且 30 秒内仍新鲜的实时来源。快照汇总以完整网址和重复次数计算仍在 Chrome 任意位置的网页数量；标签组状态先按保存时的标签组标识找到原组，再在组内按重复次数核对。
+- `SnapshotPresenceEvaluator` 只接受标识完全一致、`kind = chrome` 且 30 秒内仍新鲜的实时来源。快照汇总以完整网址和重复次数计算仍在 Chrome 任意位置的网页数量；标签组状态先核对保存时的原组，原组缺失后再核对明确记录的恢复组标识。
+- `ChromeRestoredGroupRepository` 把来源、快照、原组和最近恢复组的映射原子写入 `chrome-restored-groups.json`。它不进入资料库导出，也不跨 Chrome 来源匹配；Safari 完全不读取该索引。
+- `ChromeLibraryOverviewBuilder` 在领域层按 Chrome 快照计算已离开、部分仍在、全部仍在与待确认数量；标签组快照使用原组／恢复组语境，Safari 合集在计数前即被排除。
 - 在场状态区分全部仍在、部分仍在、已经离开与无法确认。来源缺失或过期一律返回无法确认；Safari 合集和空 Chrome 快照不产生在场状态，另一 Chrome 来源也不能补足结果。
 - Chrome 实时页用同一分组覆盖结果在内存中计算“全部 / 需保存 / 已收纳”；筛选只构造当前视图需要的窗口与标签组数组，不写偏好、不改模型，也不发送浏览器命令。
 - `GroupRestorePreviewBuilder` 只在用户点击 Chrome“恢复整组”时运行；它只选择标识匹配且 `kind = chrome` 的实时来源，以完整网址和重复次数计算当前已打开数量，不读取 Safari 合集，也不改变将发送的完整网址列表。

@@ -84,7 +84,11 @@ struct SearchResultsView: View {
     }
     .sheet(item: $restoreTarget) { target in
       GroupRestorePreviewSheet(target: target) {
-        model.restore(group: target.group, sourceId: target.sourceId)
+        model.restore(
+          group: target.group,
+          sourceId: target.sourceId,
+          snapshotId: target.snapshotId
+        )
       }
     }
   }

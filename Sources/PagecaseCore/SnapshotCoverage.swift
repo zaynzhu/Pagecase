@@ -57,19 +57,27 @@ public enum ChromeSnapshotPresenceState: Equatable, Sendable {
   case unavailable
 }
 
+public enum ChromeGroupPresenceLocation: Equatable, Sendable {
+  case original
+  case restored
+}
+
 public struct ChromeSnapshotPresence: Equatable, Sendable {
   public let state: ChromeSnapshotPresenceState
   public let snapshotPageCount: Int
   public let openPageCount: Int
+  public let groupLocation: ChromeGroupPresenceLocation?
 
   public init(
     state: ChromeSnapshotPresenceState,
     snapshotPageCount: Int,
-    openPageCount: Int
+    openPageCount: Int,
+    groupLocation: ChromeGroupPresenceLocation? = nil
   ) {
     self.state = state
     self.snapshotPageCount = snapshotPageCount
     self.openPageCount = openPageCount
+    self.groupLocation = groupLocation
   }
 
   public var closedPageCount: Int {
@@ -98,6 +106,7 @@ public enum SnapshotPresenceEvaluator {
   public static func evaluate(
     group: TabGroup,
     sourceId: String,
+    restoredGroupId: Int? = nil,
     liveStates: [LiveState],
     at date: Date = Date()
   ) -> ChromeSnapshotPresence {
@@ -108,18 +117,30 @@ public enum SnapshotPresenceEvaluator {
     ) else {
       return unavailablePresence(pageCount: group.tabs.count)
     }
-    guard let liveGroup = liveState.windows
-      .flatMap(\.groups)
-      .first(where: { $0.id == group.id }) else {
-      return ChromeSnapshotPresence(
-        state: .noneOpen,
-        snapshotPageCount: group.tabs.count,
-        openPageCount: 0
+    let liveGroups = liveState.windows.flatMap(\.groups)
+    if let originalGroup = liveGroups.first(where: { $0.id == group.id }) {
+      let originalPresence = presence(
+        expectedPages: group.tabs,
+        availablePages: originalGroup.tabs,
+        groupLocation: .original
+      )
+      if originalPresence.state != .noneOpen || restoredGroupId == nil {
+        return originalPresence
+      }
+    }
+    if let restoredGroupId,
+       let restoredGroup = liveGroups.first(where: { $0.id == restoredGroupId }) {
+      return presence(
+        expectedPages: group.tabs,
+        availablePages: restoredGroup.tabs,
+        groupLocation: .restored
       )
     }
-    return presence(
-      expectedPages: group.tabs,
-      availablePages: liveGroup.tabs
+    return ChromeSnapshotPresence(
+      state: .noneOpen,
+      snapshotPageCount: group.tabs.count,
+      openPageCount: 0,
+      groupLocation: restoredGroupId == nil ? .original : .restored
     )
   }
 
@@ -145,7 +166,8 @@ public enum SnapshotPresenceEvaluator {
 
   private static func presence(
     expectedPages: [PageItem],
-    availablePages: [PageItem]
+    availablePages: [PageItem],
+    groupLocation: ChromeGroupPresenceLocation? = nil
   ) -> ChromeSnapshotPresence {
     let openPageCount = matchedItemCount(
       expectedItems: expectedPages.map(\.url),
@@ -163,7 +185,8 @@ public enum SnapshotPresenceEvaluator {
     return ChromeSnapshotPresence(
       state: state,
       snapshotPageCount: expectedPages.count,
-      openPageCount: openPageCount
+      openPageCount: openPageCount,
+      groupLocation: groupLocation
     )
   }
 
@@ -210,6 +233,88 @@ public enum SnapshotPresenceEvaluator {
     windows.flatMap { window in
       window.groups.flatMap(\.tabs) + window.ungroupedTabs
     }
+  }
+}
+
+public struct ChromeLibraryOverview: Equatable, Sendable {
+  public let allOpenCount: Int
+  public let partiallyOpenCount: Int
+  public let noneOpenCount: Int
+  public let unavailableCount: Int
+
+  public init(
+    allOpenCount: Int,
+    partiallyOpenCount: Int,
+    noneOpenCount: Int,
+    unavailableCount: Int
+  ) {
+    self.allOpenCount = allOpenCount
+    self.partiallyOpenCount = partiallyOpenCount
+    self.noneOpenCount = noneOpenCount
+    self.unavailableCount = unavailableCount
+  }
+
+  public var totalCount: Int {
+    allOpenCount + partiallyOpenCount + noneOpenCount + unavailableCount
+  }
+}
+
+public enum ChromeLibraryOverviewBuilder {
+  public static func make(
+    snapshots: [SavedSnapshot],
+    liveStates: [LiveState],
+    restoredGroups: ChromeRestoredGroupIndex = ChromeRestoredGroupIndex(),
+    at date: Date = Date()
+  ) -> ChromeLibraryOverview {
+    var allOpenCount = 0
+    var partiallyOpenCount = 0
+    var noneOpenCount = 0
+    var unavailableCount = 0
+
+    for snapshot in snapshots where snapshot.sourceKind == .chrome {
+      let presence: ChromeSnapshotPresence?
+      if snapshot.scope == .group,
+         let group = snapshot.windows.flatMap(\.groups).first {
+        let restoredGroupId = restoredGroups.record(
+          sourceId: snapshot.sourceId,
+          snapshotId: snapshot.id,
+          originalGroupId: group.id
+        )?.restoredGroupId
+        presence = SnapshotPresenceEvaluator.evaluate(
+          group: group,
+          sourceId: snapshot.sourceId,
+          restoredGroupId: restoredGroupId,
+          liveStates: liveStates,
+          at: date
+        )
+      } else {
+        presence = SnapshotPresenceEvaluator.evaluate(
+          snapshot: snapshot,
+          liveStates: liveStates,
+          at: date
+        )
+      }
+      guard let presence else {
+        continue
+      }
+      switch presence.state {
+      case .allOpen:
+        allOpenCount += 1
+      case .partiallyOpen:
+        partiallyOpenCount += 1
+      case .noneOpen:
+        noneOpenCount += 1
+      case .unavailable:
+        unavailableCount += 1
+      }
+    }
+
+    return ChromeLibraryOverview(
+      allOpenCount: allOpenCount,
+      partiallyOpenCount: partiallyOpenCount,
+      noneOpenCount: noneOpenCount,
+      unavailableCount: unavailableCount
+    )
   }
 }
 

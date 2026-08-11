@@ -18,7 +18,8 @@ export class CommandExecutionError extends Error {
     {
       failureStage,
       createdTabCount = 0,
-      groupCreated = false
+      groupCreated = false,
+      restoredGroupId
     } = {}
   ) {
     super(message)
@@ -26,6 +27,7 @@ export class CommandExecutionError extends Error {
     this.failureStage = failureStage
     this.createdTabCount = createdTabCount
     this.groupCreated = groupCreated
+    this.restoredGroupId = restoredGroupId
   }
 }
 
@@ -99,14 +101,16 @@ export async function executeCommand(command, api = chrome) {
       throw new CommandExecutionError("标签组已创建，但组名或颜色设置失败", {
         failureStage: "updatingGroup",
         createdTabCount: createdTabIds.length,
-        groupCreated: true
+        groupCreated: true,
+        restoredGroupId: groupId
       })
     }
     const displayTitle = command.groupTitle.trim() || "未命名标签组"
     return {
       message: `已恢复「${displayTitle}」，共 ${createdTabIds.length} 个网页`,
       createdTabCount: createdTabIds.length,
-      groupCreated: true
+      groupCreated: true,
+      restoredGroupId: groupId
     }
   }
   case "pong":

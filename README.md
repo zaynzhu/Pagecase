@@ -18,7 +18,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-0.6.0-2F3437?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.7.0-2F3437?style=flat-square)
 ![macOS](https://img.shields.io/badge/macOS-14%2B-787774?style=flat-square&logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-6-D97757?style=flat-square&logo=swift&logoColor=white)
 
@@ -147,6 +147,8 @@ open "dist/页匣.app"
 
 打开 Chrome 快照后，标题下方会显示这份快照中的网页还有多少仍存在于同一个 Chrome 来源；每个标签组旁会进一步显示保存时的原标签组是否仍存在，以及组内还剩多少保存网页。重复网址按实际数量核对，不会把一个页面重复计算多次。
 
+快照索引顶部的“收纳总览”会汇总已离开、部分仍在、全部仍在和待确认的快照数量。标签组恢复成功后，扩展还会返回本次创建的新组标识；页匣将它单独保存在本机，之后会把状态显示为“已恢复为新组”，而不是继续把新组误认成已经离开的原组。
+
 - “全部仍在 Chrome”表示这些保存网页仍全部打开。
 - “N / M 仍在 Chrome”表示只有一部分仍打开。
 - “已离开 Chrome”表示这些网页目前只保存在本地快照中。
@@ -155,6 +157,8 @@ open "dist/页匣.app"
 这组状态只属于 Chrome 快照。Safari 合集没有后台实时来源，因此不会显示 Chrome 在场状态，也不会被拿来参与判断。状态只帮助你核对结果，关闭操作仍由你在浏览器中完成。
 
 ![Chrome 快照在场状态](artifacts/qa-chrome-presence-mixed.png)
+
+![Chrome 收纳总览与恢复新组状态](artifacts/qa-chrome-overview-restored-group.jpg)
 
 ### 收纳 Safari 当前窗口
 
@@ -283,7 +287,7 @@ npm run check:safari
 
 仓库内置 [GitHub Actions 项目检查](.github/workflows/quality.yml)：推送到 `main`、提交 Pull Request 或手动触发时，使用标准 `macos-15` runner 执行同一组 Swift、扩展、Safari 边界、Release 与 Bridge 检查。工作流只有代码读取权限，不上传构建产物，也不会连接真实 Chrome 或 Safari。
 
-当前 0.6.0 版本已通过 106 项 Swift 核心行为检查、13 项扩展测试、Bridge 结构化结果往返、Chrome 扩展与 Safari 捕获静态安全检查、Release 构建、浅深色视觉验收和 500 页性能验收。
+当前 0.7.0 版本已通过 109 项 Swift 核心行为检查、13 项扩展测试、Bridge 结构化结果往返、Chrome 扩展与 Safari 捕获静态安全检查、Release 构建、浅深色视觉验收和 500 页性能验收。
 
 > [!NOTE]
 > 仅安装 Command Line Tools 的环境无法正常枚举 Swift Testing 测试；`swift test` 仍负责编译测试包，`PagecaseCoreChecks` 会实际执行同一组关键行为检查。

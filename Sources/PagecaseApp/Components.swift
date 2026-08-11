@@ -329,13 +329,21 @@ struct ChromePresenceLabel: View {
   ) -> String {
     switch presence.state {
     case .allOpen:
-      return context == .group ? "原组仍在 Chrome" : "全部仍在 Chrome"
+      if context == .group {
+        return presence.groupLocation == .restored ? "已恢复为新组" : "原组仍在 Chrome"
+      }
+      return "全部仍在 Chrome"
     case .partiallyOpen:
-      return context == .group
-        ? "\(presence.openPageCount) / \(presence.snapshotPageCount) 仍在原组"
-        : "\(presence.openPageCount) / \(presence.snapshotPageCount) 仍在 Chrome"
+      if context == .group {
+        let groupName = presence.groupLocation == .restored ? "恢复组" : "原组"
+        return "\(presence.openPageCount) / \(presence.snapshotPageCount) 仍在\(groupName)"
+      }
+      return "\(presence.openPageCount) / \(presence.snapshotPageCount) 仍在 Chrome"
     case .noneOpen:
-      return context == .group ? "原组已离开" : "已离开 Chrome"
+      if context == .group {
+        return presence.groupLocation == .restored ? "恢复组已离开" : "原组已离开"
+      }
+      return "已离开 Chrome"
     case .unavailable:
       return "暂时无法确认"
     }
@@ -357,17 +365,24 @@ struct ChromePresenceLabel: View {
   private var detail: String {
     switch presence.state {
     case .allOpen:
-      return context == .group
-        ? "组内网页和保存时一致"
-        : "这些网页仍在同一 Chrome 来源中"
+      if context == .group {
+        return presence.groupLocation == .restored
+          ? "新组网页和快照一致"
+          : "组内网页和保存时一致"
+      }
+      return "这些网页仍在同一 Chrome 来源中"
     case .partiallyOpen:
-      return context == .group
-        ? "\(presence.closedPageCount) 个已离开原组"
-        : "\(presence.closedPageCount) 个已离开"
+      if context == .group {
+        let groupName = presence.groupLocation == .restored ? "恢复组" : "原组"
+        return "\(presence.closedPageCount) 个已离开\(groupName)"
+      }
+      return "\(presence.closedPageCount) 个已离开"
     case .noneOpen:
-      return context == .group
-        ? "原组的 \(presence.snapshotPageCount) 个网页仍保存在快照中"
-        : "\(presence.snapshotPageCount) 个网页只保存在快照中"
+      if context == .group {
+        let groupName = presence.groupLocation == .restored ? "恢复组" : "原组"
+        return "\(groupName)的 \(presence.snapshotPageCount) 个网页仍保存在快照中"
+      }
+      return "\(presence.snapshotPageCount) 个网页只保存在快照中"
     case .unavailable:
       return "来源未连接或实时数据已过期"
     }
@@ -376,17 +391,24 @@ struct ChromePresenceLabel: View {
   private var helpText: String {
     switch presence.state {
     case .allOpen:
-      return context == .group
-        ? "最近一次可用的同一 Chrome 来源仍包含保存时的原标签组，且组内网页完整。关闭仍由你在 Chrome 完成。"
-        : "最近一次可用的同一 Chrome 来源仍包含快照中的全部网页。关闭仍由你在 Chrome 完成。"
+      if context == .group {
+        return presence.groupLocation == .restored
+          ? "最近一次恢复创建的新标签组仍在同一 Chrome 来源中，且组内网页完整。关闭仍由你在 Chrome 完成。"
+          : "最近一次可用的同一 Chrome 来源仍包含保存时的原标签组，且组内网页完整。关闭仍由你在 Chrome 完成。"
+      }
+      return "最近一次可用的同一 Chrome 来源仍包含快照中的全部网页。关闭仍由你在 Chrome 完成。"
     case .partiallyOpen:
-      return context == .group
-        ? "原标签组仍存在，但只保留 \(presence.openPageCount) 个保存时的网页；另外 \(presence.closedPageCount) 个已经离开原组。"
-        : "最近一次可用的同一 Chrome 来源仍包含 \(presence.openPageCount) 个快照网页；另外 \(presence.closedPageCount) 个已经离开。"
+      if context == .group {
+        let groupName = presence.groupLocation == .restored ? "恢复标签组" : "原标签组"
+        return "\(groupName)仍存在，但只保留 \(presence.openPageCount) 个保存时的网页；另外 \(presence.closedPageCount) 个已经离开。"
+      }
+      return "最近一次可用的同一 Chrome 来源仍包含 \(presence.openPageCount) 个快照网页；另外 \(presence.closedPageCount) 个已经离开。"
     case .noneOpen:
-      return context == .group
-        ? "最近一次可用的同一 Chrome 来源已经找不到保存时的原标签组；本地快照仍完整保留。"
-        : "最近一次可用的同一 Chrome 来源已经找不到这些网页；本地快照仍完整保留。"
+      if context == .group {
+        let groupName = presence.groupLocation == .restored ? "最近恢复的新标签组" : "保存时的原标签组"
+        return "最近一次可用的同一 Chrome 来源已经找不到\(groupName)；本地快照仍完整保留。"
+      }
+      return "最近一次可用的同一 Chrome 来源已经找不到这些网页；本地快照仍完整保留。"
     case .unavailable:
       return "同一 Chrome 来源未连接或实时数据已经过期，因此不会推测网页是否已经关闭。"
     }
